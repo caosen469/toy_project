@@ -56,6 +56,18 @@ set([type(each) for each in cbg_df["geometry"]])
 # 查看不是polygon的行
 cbg_df[cbg_df["geometry"].map(lambda x: type(x)==shapely.geometry.multipolygon.MultiPolygon)]
 
+# 对于是multipolygon的行，只保留面积最大的那个
+def multipoly(x):
+    if type(x) !=shapely.geometry.multipolygon.MultiPolygon:
+        return x
+    else:
+        a = list(x)
+        area = [each.area for each in a]
+        max_idx = np.argmax(area)
+        return a[max_idx]
+
+cbg_df["geometry"] = cbg_df["geometry"].map(lambda x: multipoly(x))
+
 # 基于cbg_df["geometry"]计算出来对应polygon的质心
 cbg_df["centroid"] = cbg_df["geometry"].map(lambda x: x.centroid)
 
