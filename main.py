@@ -75,6 +75,7 @@ cbg_df["centroid"] = cbg_df["geometry"].map(lambda x: x.centroid)
 queen = weights.Queen.from_dataframe(cbg_df)
 # 构建queen邻接图
 queen_graph = queen.to_networkx()
+cbg_adjacency = np.array(nx.adjacency_matrix(queen_graph).todense())
 
 #  可视化
 centroids = np.array([[each.xy[0][0], each.xy[1][0]] for each in cbg_df["centroid"]])
@@ -132,34 +133,72 @@ del poi_df
 
 #%% 给pattern_df家上服务区域，给cbg_df加入被服务的poi
 
-def long_lat_2_distance(x, poi_lat, poi_long):
-    # 获得cbg的lat
-    # print("poi_lat is", poi_lat)
-    # print("poi_long is", poi_long)
-    cbg_lat = x.xy[1][0]
-    cbg_long = x.xy[0][0]
-    # print("cbg_lat is", cbg_lat)
-    # print("cbg_long is", cbg_long)
+# def long_lat_2_distance(x, poi_lat, poi_long):
+#     # 获得cbg的lat
+#     # print("poi_lat is", poi_lat)
+#     # print("poi_long is", poi_long)
+#     cbg_lat = x.xy[1][0]
+#     cbg_long = x.xy[0][0]
+#     # print("cbg_lat is", cbg_lat)
+#     # print("cbg_long is", cbg_long)
 
-    # return geopy.distance.geodesic((poi_long, poi_lat), (cbg_long, cbg_lat)).km
-    return geopy.distance.geodesic((poi_lat, poi_long), (cbg_lat,cbg_long)).km
+#     # return geopy.distance.geodesic((poi_long, poi_lat), (cbg_long, cbg_lat)).km
+#     return geopy.distance.geodesic((poi_lat, poi_long), (cbg_lat,cbg_long)).km
 
-# x是一个poi点
-def poi_2_cbg(x, cbg_df):
-    cbg_df2 = cbg_df.copy()
-    lat = x["latitude"]
-    long = x["longitude"]
-    # 计算每个cbg跟poi点的关系
-    cbg_df2["poi_distance"] = cbg_df2["centroid"].map(lambda x: long_lat_2_distance(x, lat, long))
-    # 筛选出poi_distance小于2km的行
-    cbg_df2 = cbg_df2[cbg_df2["poi_distance"] <= 10]
-    print(cbg_df2)
-    return list(cbg_df2["FIPS"])
+# # x是一个poi点
+# def poi_2_cbg(x, cbg_df):
+#     cbg_df2 = cbg_df.copy()
+#     lat = x["latitude"]
+#     long = x["longitude"]
+#     # 计算每个cbg跟poi点的关系
+#     cbg_df2["poi_distance"] = cbg_df2["centroid"].map(lambda x: long_lat_2_distance(x, lat, long))
+#     # 筛选出poi_distance小于2km的行
+#     cbg_df2 = cbg_df2[cbg_df2["poi_distance"] <= 10]
+#     print(cbg_df2)
+#     return list(cbg_df2["FIPS"])
 
 ## 计算poi的服务关系
-pattern_df["served_cbg"] = pattern_df.apply(lambda x: poi_2_cbg(x, cbg_df), axis=1)
+# pattern_df["served_cbg"] = pattern_df.apply(lambda x: poi_2_cbg(x, cbg_df), axis=1)
 
 ## 根据 poi所在cbg和相邻cbg构建服务关系
+
+# 筛选出日期小一点的poi
+pattern_df = pattern_df[pattern_df["start_day"]=='2021-02-08']
+
+# 获取目标poi所在cbg的k跳邻居
+def get_neigbors(g, node, depth=1):
+    output = {}
+    layers = dict(nx.bfs_successors(g, source=node, depth_limit=depth))
+    nodes = [node]
+    for i in range(1,depth+1):
+        output[i] = []
+        for x in nodes:
+            output[i].extend(layers.get(x,[]))
+        nodes = output[i]
+    return output
+
+def hop_neighbor(x, queen_graph, cbg_df):
+    network_idx = cbg_df[cbg_df["FIPS"]==x].index[0]
+    return get_neigbors(queen_graph, network_idx, depth=2)
+
+
+pattern_df["served_cbg"] = pattern_df["poi_cbg"].map(lambda x: hop_neighbor(x, queen_graph, cbg_df))
+
+# 将所有的service合并成一个列表
+pattern_df["served_cbg"] = pattern_df["served_cbg"].map(lambda x: [each for key in x.keys() for each in x[key]])
+
+# 遍历poi 所有served cbg，给cbg加入 served_poi属性
+cbg_df["served_poi"] = cbg_df.apply(lambda x: [], axis=1)
+
+for idx in range(pattern_df.shape[0]): # 遍历每一行
+    placekey = pattern_df.iloc[idx]["placekey"]
+    cbg = pattern_df.iloc[idx]["served_cbg"]
+
+    for each in cbg: # each 应该是一个cbg在networt里的编号
+        FIPS = cbg_df.iloc[each][-1].append(placekey)
+        
+
+## cbg得到的poi服务关系
 
 #%% 
 
