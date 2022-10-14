@@ -2,7 +2,7 @@ import geopandas as gp
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import function
+# import function
 # import pysal as ps
 from libpysal import weights
 import os
@@ -11,6 +11,7 @@ import math
 import glob
 import geopy.distance
 import shapely
+import ast
 
 def poi_cbg_transform(x):
     if not(np.isnan(x)):
@@ -75,7 +76,16 @@ cbg_df["centroid"] = cbg_df["geometry"].map(lambda x: x.centroid)
 queen = weights.Queen.from_dataframe(cbg_df)
 # 构建queen邻接图
 queen_graph = queen.to_networkx()
+
+# 消除孤岛
+island_node = 758
+connected_nodes = [68,275,475,962,1610,344,84,856]
+for node in connected_nodes:
+    queen_graph.add_edge(island_node, node)
+
 cbg_adjacency = np.array(nx.adjacency_matrix(queen_graph).todense())
+
+
 
 #  可视化
 centroids = np.array([[each.xy[0][0], each.xy[1][0]] for each in cbg_df["centroid"]])
@@ -90,8 +100,9 @@ plt.show()
 ## 读取poi parttern数据
 # pattern_df = pd.read_csv(r"D:\software\清华云盘\download\mobility\03\21\patterns-part1.csv", nrows=100)
 
-pattern_df = pd.read_csv(r"D:\software\清华云盘\download\mobility\pattern_time_limit.csv")
-
+##
+pattern_df = pd.read_csv(r"D:\software\清华云盘\download\mobility\county_poi.csv")
+pattern_df = pd.read_csv(r"D:\Project\GNN_resilience\data\county_poi.csv")
 
 
 pattern_df["poi_cbg"] = pattern_df["poi_cbg"].map(lambda x: poi_cbg_transform(x))
@@ -163,7 +174,7 @@ del poi_df
 ## 根据 poi所在cbg和相邻cbg构建服务关系
 
 # 筛选出日期小一点的poi
-pattern_df = pattern_df[pattern_df["start_day"]=='2021-02-08']
+pattern_df = pattern_df[pattern_df["start_day"]=='2021-01-25']
 
 # 获取目标poi所在cbg的k跳邻居
 def get_neigbors(g, node, depth=1):
@@ -199,6 +210,60 @@ for idx in range(pattern_df.shape[0]): # 遍历每一行
         
 
 ## cbg得到的poi服务关系
+
+#%% Flow assign
+
+## 基于POI数据，计算出flow 数目
+# pattern_df["visitor_home_cbgs"] = pd.Series()
+# file_list_of_pattern = [each for each in file_list if "pattern" in each]
+
+# for each in file_list_of_pattern:
+#     pattern = pd.read_csv(each)
+#     pattern = pattern[["placekey", "visitor_home_cbgs"]]
+
+#     # 使用apply函数，为pattern_df查找poi_df中的经纬度
+#     pattern_df = pattern_df.fillna(pattern)
+
+#     # if pattern_df["visitor_home_cbgs"].isna().sum() == 0:
+#     #     break
+# del pattern  
+
+# pattern_df["visitor_home_cbgs"]是一个字典，key是cbg编号，value是visit数目
+adjacency_flow = np.zeros(cbg_adjacency.shape)
+
+for i in range(pattern_df.shape[0]):
+    visitor_cbg_dict = pattern_df.iloc[i]["visitor_home_cbgs"]
+    visitor_cbg_dict = ast.literal_eval(visitor_cbg_dict)
+    end_cbg = pattern_df.iloc[i]["poi_cbg"]
+    end_node = cbg_df[cbg_df["FIPS"]==end_cbg].index[0]
+
+    # visitor也来自于county内的
+    keys = [key for key in visitor_cbg_dict.keys() if "48201" in key]
+
+    # key 是一个FIPS
+    for key in keys:
+        value = visitor_cbg_dict[key] # 人数
+        start_node = cbg_df[cbg_df["FIPS"]==key].index[0]
+
+        # 求取两个点之间的路径
+        shortest_path = nx.dijkstra_path(queen_graph, start_node, end_node)
+        
+        end_nodes = shortest_path[1:]
+
+        for end_node in end_nodes:
+            adjacency_flow[start_node, end_node] = adjacency_flow[start_node, end_node] + value
+
+# 两个方向加到一起
+adjacency_flow
+row,col = adjacency_flow.shape
+
+for i in range(row):
+    for j in range(i,col):
+        adjacency_flow[i,j] += adjacency_flow[j,i]
+
+for i in range(row):
+    for j in range(0,i+1):
+        adjacency_flow[j,i] = adjacency_flow[i,j]
 
 #%% 
 
