@@ -5,13 +5,43 @@ import matplotlib.pyplot as plt
 import ast
 import datetime
 import time
-import function
+# import function
 import glob
 # import zipfile 
 # import rarfile
 # import gzip
 import tqdm
 import math
+
+#%%
+
+# 批量获取路径
+file_list = glob.glob(r'D:\software\清华云盘\download\mobility\**\**\*.csv')
+
+# 提取出core_poi文件
+file_list_of_core_poi = [each for each in file_list if "core" in each]
+
+file_list_of_pattern = [each for each in file_list if "pattern" in each]
+
+# 构造naics-placekey 词典
+# nacis_placekey_dict = function.nacis_key_dict(file_list_of_core_poi)
+#%%
+# 读取所有的pandas
+df_poi1 = pd.read_csv(file_list_of_core_poi[0])
+df_poi1 = df_poi1[df_poi1["region"].map(lambda x: x == "TX")]
+df_poi1 = df_poi1[["placekey", "naics_code", "latitude", "longitude"]]
+for file_path in tqdm.tqdm(file_list_of_core_poi[1:]):
+    df_poi2 = pd.read_csv(file_path)
+    df_poi2 = df_poi2[df_poi2["region"].map(lambda x: x == "TX")]
+    df_poi2 = df_poi2[["placekey", "naics_code", "latitude", "longitude"]]
+    
+    df_poi1 = pd.concat([df_poi1, df_poi2], axis=0, ignore_index=0)
+
+df_poi1 = df_poi1.drop_duplicates(subset=["placekey"])
+df_poi1 = df_poi1.reset_index(drop=True)
+df_poi1.to_csv(r"D:\software\清华云盘\download\mobility\poi.csv")
+
+# df1 = pd.read_csv(r"D:\software\清华云盘\download\mobility\poi.csv")
 
 #%%
 
@@ -91,9 +121,22 @@ for df_pattern_path in tqdm.tqdm(file_list_of_pattern[1:]):
     print(df_pattern1.shape)
 
 # 加入naics code数据
+df_pattern1
+
 df_pattern1 = df_pattern1.merge(df1, how="left", on="placekey")
 df_pattern1 = df_pattern1[df_pattern1["naics_code"].map(lambda x: not math.isnan(x))]
 
+# 使用fill试试
+# df1 = df1.set_index("placekey")
 
+# b = df_pattern1.copy()
+# b["naics_code"] = pd.Series()
+# b["latitude"] = pd.Series()
+# b["longitude"] = pd.Series()
+# b = b.set_index("placekey")
+
+# b = b.fillna(df1)
+# b = b.reset_index()
 df_pattern1.to_csv("county_poi.csv")
+
 # %%

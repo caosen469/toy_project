@@ -28,3 +28,10 @@ def func2():
         for j in range(col):
             if adjacency_flow[i,j] !=0:
                 print(adjacency_flow[i,j])
+
+# distance计算：
+def func3():
+    a = pattern_df.iloc[0]
+    a[["latitude", "longitude"]]
+    b = cbg_df[cbg_df["FIPS"]==a["poi_cbg"]]
+    b["geometry"]

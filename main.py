@@ -12,6 +12,8 @@ import glob
 import geopy.distance
 import shapely
 import ast
+from scipy.spatial.distance import cdist
+import random
 
 def poi_cbg_transform(x):
     if not(np.isnan(x)):
@@ -125,51 +127,24 @@ pattern_df = pattern_df[pattern_df["naics_code"].str.startswith('4451')]
 file_list = glob.glob(r'D:\software\清华云盘\download\mobility\**\**\*.csv')
 
 # 在pattern_df中添加经纬度两列
-pattern_df["latitude"] = pd.Series()
-pattern_df["longitude"] = pd.Series()
+# pattern_df["latitude"] = pd.Series()
+# pattern_df["longitude"] = pd.Series()
 
-# 提取出core_poi文件
-file_list_of_core_poi = [each for each in file_list if "core" in each]
+# # 提取出core_poi文件
+# file_list_of_core_poi = [each for each in file_list if "core" in each]
 
-for each in file_list_of_core_poi:
-    poi_df = pd.read_csv(each)
-    poi_df = poi_df[["placekey", "latitude", "longitude"]]
+# for each in file_list_of_core_poi:
+#     poi_df = pd.read_csv(each)
+#     poi_df = poi_df[["placekey", "latitude", "longitude"]]
 
-    # 使用apply函数，为pattern_df查找poi_df中的经纬度
-    pattern_df = pattern_df.fillna(poi_df)
+#     # 使用apply函数，为pattern_df查找poi_df中的经纬度
+#     pattern_df = pattern_df.fillna(poi_df)
 
-    if pattern_df["latitude"].isna().sum() == 0:
-        break
-del poi_df   
+#     if pattern_df["latitude"].isna().sum() == 0:
+#         break
+# del poi_df   
 
 #%% 给pattern_df家上服务区域，给cbg_df加入被服务的poi
-
-# def long_lat_2_distance(x, poi_lat, poi_long):
-#     # 获得cbg的lat
-#     # print("poi_lat is", poi_lat)
-#     # print("poi_long is", poi_long)
-#     cbg_lat = x.xy[1][0]
-#     cbg_long = x.xy[0][0]
-#     # print("cbg_lat is", cbg_lat)
-#     # print("cbg_long is", cbg_long)
-
-#     # return geopy.distance.geodesic((poi_long, poi_lat), (cbg_long, cbg_lat)).km
-#     return geopy.distance.geodesic((poi_lat, poi_long), (cbg_lat,cbg_long)).km
-
-# # x是一个poi点
-# def poi_2_cbg(x, cbg_df):
-#     cbg_df2 = cbg_df.copy()
-#     lat = x["latitude"]
-#     long = x["longitude"]
-#     # 计算每个cbg跟poi点的关系
-#     cbg_df2["poi_distance"] = cbg_df2["centroid"].map(lambda x: long_lat_2_distance(x, lat, long))
-#     # 筛选出poi_distance小于2km的行
-#     cbg_df2 = cbg_df2[cbg_df2["poi_distance"] <= 10]
-#     print(cbg_df2)
-#     return list(cbg_df2["FIPS"])
-
-## 计算poi的服务关系
-# pattern_df["served_cbg"] = pattern_df.apply(lambda x: poi_2_cbg(x, cbg_df), axis=1)
 
 ## 根据 poi所在cbg和相邻cbg构建服务关系
 
@@ -208,8 +183,57 @@ for idx in range(pattern_df.shape[0]): # 遍历每一行
     for each in cbg: # each 应该是一个cbg在networt里的编号
         FIPS = cbg_df.iloc[each][-1].append(placekey)
         
+## 根据 poi所在cbg和距离计算服务关系
 
-## cbg得到的poi服务关系
+# def distance_neighbors(x, cbg_df):
+#     # x是poi所在的cbg编号
+#     poi_lat = x["latitude"]
+#     poi_long = x["longitude"]
+
+#     # 计算这个poi和所有的cbg的距离
+
+
+# pattern_df["served_cbg_distance"] = pattern_df["poi_cbg"].apply( distance_neighbors(x, cbg_df), axis=1)
+
+## 之前写的
+def long_lat_2_distance(x, poi_lat, poi_long):
+    # 获得cbg的lat
+    # print("poi_lat is", poi_lat)
+    # print("poi_long is", poi_long)
+    cbg_lat = x.xy[1][0]
+    cbg_long = x.xy[0][0]
+    # print("cbg_lat is", cbg_lat)
+    # print("cbg_long is", cbg_long)
+
+    # return geopy.distance.geodesic((poi_long, poi_lat), (cbg_long, cbg_lat)).km
+    return geopy.distance.geodesic((poi_lat, poi_long), (cbg_lat,cbg_long)).km
+    # print("####################")
+    # cdist(np.array([poi_lat, poi_long]).reshape((1,-1)), np.array([cbg_lat, cbg_long]).reshape((1,-1)), metric="euclidean")
+    # print("####################")
+
+# x是一个poi点
+def poi_2_cbg(x, cbg_df):
+    cbg_df2 = cbg_df.copy()
+    poi_lat = x["latitude"]
+    poi_long = x["longitude"]
+    # 计算每个cbg跟poi点的关系
+    cbg_df2["poi_distance"] = cbg_df2["centroid"].map(lambda x: long_lat_2_distance(x, poi_lat, poi_long))
+    # 筛选出poi_distance小于2km的行
+    cbg_df2 = cbg_df2[cbg_df2["poi_distance"] <= 10]
+    return list(cbg_df2.index)
+
+# 计算poi的服务关系
+pattern_df["served_cbg_distance"] = pattern_df.apply(lambda x: poi_2_cbg(x, cbg_df), axis=1)
+
+cbg_df["served_poi_distance"] = cbg_df.apply(lambda x: [], axis=1)
+
+for idx in range(pattern_df.shape[0]): # 遍历每一行
+    placekey = pattern_df.iloc[idx]["placekey"]
+    cbg = pattern_df.iloc[idx]["served_cbg"]
+
+    for each in cbg: # each 应该是一个cbg在networt里的编号
+        FIPS = cbg_df.iloc[each][-1].append(placekey)
+        
 
 #%% Flow assign
 
@@ -254,7 +278,6 @@ for i in range(pattern_df.shape[0]):
             adjacency_flow[start_node, end_node] = adjacency_flow[start_node, end_node] + value
 
 # 两个方向加到一起
-adjacency_flow
 row,col = adjacency_flow.shape
 
 for i in range(row):
@@ -265,15 +288,25 @@ for i in range(row):
     for j in range(0,i+1):
         adjacency_flow[j,i] = adjacency_flow[i,j]
 
-#%% 
 
-# # 读取德克萨斯州数据
 
-# # 批量获取路径
-# file_list = glob.glob(r'D:\software\清华云盘\download\mobility\**\**\*.csv')
+## adjacency travel distance 计算cbg间的活动距离
 
-# # 提取出core_poi文件
-# file_list_of_core_poi = [each for each in file_list if "core" in each]
+## 保存与处理数据
+pattern_df.to_csv(r"D:\Project\GNN_resilience\result\pattern.csv")
+cbg_df.to_csv(r"D:\Project\GNN_resilience\result\cbg.csv")
+np.savetxt(r"D:\Project\GNN_resilience\result\adjacency_flow.csv", adjacency_flow,delimiter=',')
 
-# file_list_of_pattern = [each for each in file_list if "pattern" in each]
+
+#%% 从大的网络里采样得到导出子图induced graph
+random.seed(12345)
+
+# 随机产生一些节点编号，抽样的子图是联通的就要，不然就重新采集
+while True:
+    # 抽取节点种子 
+    random_nodes = np.random.randint(0,len(queen_graph.nodes),size=(1,100))
+
+    sub_queen = queen_graph.subgraph(random_nodes).copy()
+    if nx.is_connected(sub_queen):
+        break
 
