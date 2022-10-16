@@ -424,6 +424,8 @@ post_attack_distance = post_attack_distance.tolist()
 attack_result_dict = {sub_queen_edges[idx]:post_attack_distance[idx] for idx in range(len(post_attack_distance))}
 
 plt.plot(post_attack_distance)
+plt.xlabel("# of deleted edges")
+plt.ylabel("total travel time(km)")
 
 ## 随即攻击一百次，每次只要删除这个边了，就计算导致图的上升趋势，如果断在他这了，记1000，最后单独统计1000的次数
 
@@ -447,8 +449,9 @@ sub_pattern_df["served_cbg_distance"] = sub_pattern_df["served_cbg_distance"].ma
 sub_pattern_df["served_cbg"] = sub_pattern_df["served_cbg"].map(lambda x: outsider_removal(x, sub_cbg_index))
 
 # 消除掉sub_cbg_df中不在子网范围内的poi (依据poi所在的cbg)
-sub_cbg_df["served_poi"] = sub_cbg_df["served_poi"].map(lambda x: eval(x))
-sub_cbg_df["served_poi_distance"] = sub_cbg_df["served_poi_distance"].map(lambda x: eval(x))
+sub_cbg_df_copy=sub_cbg_df.copy()
+sub_cbg_df_copy["served_poi"] = sub_cbg_df_copy["served_poi"].map(lambda x: eval(x))
+sub_cbg_df_copy["served_poi_distance"] = sub_cbg_df_copy["served_poi_distance"].map(lambda x: eval(x))
 
 def poi_removal(x, pattern_df, sub_cbg_index, cbg_df):
     cbg_index = [pattern_df[pattern_df["placekey"]==each]["poi_cbg"].values[0] for each in x]
@@ -460,8 +463,8 @@ def poi_removal(x, pattern_df, sub_cbg_index, cbg_df):
 
     return poi_final
 
-sub_cbg_df["served_poi_distance"] = sub_cbg_df["served_poi_distance"].map(lambda x: poi_removal(x, pattern_df, sub_cbg_index, cbg_df))
-sub_cbg_df["served_poi"] = sub_cbg_df["served_poi"].map(lambda x: poi_removal(x, pattern_df, sub_cbg_index, cbg_df))
+sub_cbg_df_copy["served_poi_distance"] = sub_cbg_df_copy["served_poi_distance"].map(lambda x: poi_removal(x, pattern_df, sub_cbg_index, cbg_df))
+sub_cbg_df_copy["served_poi"] = sub_cbg_df_copy["served_poi"].map(lambda x: poi_removal(x, pattern_df, sub_cbg_index, cbg_df))
 
 ## 开始攻击节点
 total_un_served_population = 0
@@ -479,18 +482,21 @@ def poi_attack(x, poi_delete):
 
 total_un_served_populations = []
 for poi_delete in poi_list:
-    sub_cbg_df["served_poi_distance"] = sub_cbg_df["served_poi_distance"].map(lambda x:poi_attack(x, poi_delete))
+    sub_cbg_df_copy["served_poi_distance"] = sub_cbg_df_copy["served_poi_distance"].map(lambda x:poi_attack(x, poi_delete))
 
     # 得到cbg还有多少poi服务
-    sub_cbg_df["remained_service"] = sub_cbg_df["served_poi_distance"].map(lambda x: len(x))
+    sub_cbg_df_copy["remained_service"] = sub_cbg_df_copy["served_poi_distance"].map(lambda x: len(x))
 
     # 统计所有cbg剩余poi服务等于0的行
-    unserved_poi = sub_cbg_df[sub_cbg_df["remained_service"]==0]
+    unserved_poi = sub_cbg_df_copy[sub_cbg_df_copy["remained_service"]==0]
     total_un_served_population += unserved_poi["POP2012"].sum()
     # 记录数据
     total_un_served_populations.append([poi_delete, total_un_served_population])
     # 删除所有cbg剩余poi服务等于0的行
-    sub_cbg_df = sub_cbg_df[sub_cbg_df["remained_service"]>0]
+    sub_cbg_df_copy = sub_cbg_df_copy[sub_cbg_df_copy["remained_service"]>0]
 
 # 可视化
-plt.plot([each[1] for each in total_un_served_populations])
+total_population = sub_cbg_df["POP2012"].sum()
+plt.plot([each[1]/total_population for each in total_un_served_populations])
+plt.xlabel("# of delted poi")
+plt.ylabel(" unserviced population/total_pop")
