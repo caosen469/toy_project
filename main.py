@@ -440,10 +440,57 @@ sub_pattern_df["served_cbg_distance"] = sub_pattern_df["served_cbg_distance"].ma
 # 消除掉sub_pattern_df中，不在子图范围内的服务cbg
 def outsider_removal(x, sub_cbg_index):
     return [each for each in x if each in sub_cbg_index]
-
+# 在区域内的cbg
 sub_cbg_index = list(sub_cbg_df.index)
 sub_pattern_df["served_cbg_distance"] = sub_pattern_df["served_cbg_distance"].map(lambda x: outsider_removal(x, sub_cbg_index))
 
 sub_pattern_df["served_cbg"] = sub_pattern_df["served_cbg"].map(lambda x: outsider_removal(x, sub_cbg_index))
 
-# 消除掉sub_cbg_df中不在
+# 消除掉sub_cbg_df中不在子网范围内的poi (依据poi所在的cbg)
+sub_cbg_df["served_poi"] = sub_cbg_df["served_poi"].map(lambda x: eval(x))
+sub_cbg_df["served_poi_distance"] = sub_cbg_df["served_poi_distance"].map(lambda x: eval(x))
+
+def poi_removal(x, pattern_df, sub_cbg_index, cbg_df):
+    cbg_index = [pattern_df[pattern_df["placekey"]==each]["poi_cbg"].values[0] for each in x]
+    cbg_index = [cbg_df[cbg_df["FIPS"]==each].index.values[0] for each in cbg_index]
+    
+    # poi_cbg_pair = [[cbg_index[idx], x[idx]]for idx in range(len(x))]
+
+    poi_final = [x[idx] for idx in range(len(x)) if cbg_index[idx] in sub_cbg_index]
+
+    return poi_final
+
+sub_cbg_df["served_poi_distance"] = sub_cbg_df["served_poi_distance"].map(lambda x: poi_removal(x, pattern_df, sub_cbg_index, cbg_df))
+sub_cbg_df["served_poi"] = sub_cbg_df["served_poi"].map(lambda x: poi_removal(x, pattern_df, sub_cbg_index, cbg_df))
+
+## 开始攻击节点
+total_un_served_population = 0
+# 删除一个poi，考虑served_poi_distance
+poi_list = list(sub_pattern_df["placekey"])
+random.shuffle(poi_list)
+
+
+def poi_attack(x, poi_delete):
+    if not(poi_delete in x):
+        return x
+    else:
+        x.remove(poi_delete)
+        return x 
+
+total_un_served_populations = []
+for poi_delete in poi_list:
+    sub_cbg_df["served_poi_distance"] = sub_cbg_df["served_poi_distance"].map(lambda x:poi_attack(x, poi_delete))
+
+    # 得到cbg还有多少poi服务
+    sub_cbg_df["remained_service"] = sub_cbg_df["served_poi_distance"].map(lambda x: len(x))
+
+    # 统计所有cbg剩余poi服务等于0的行
+    unserved_poi = sub_cbg_df[sub_cbg_df["remained_service"]==0]
+    total_un_served_population += unserved_poi["POP2012"].sum()
+    # 记录数据
+    total_un_served_populations.append([poi_delete, total_un_served_population])
+    # 删除所有cbg剩余poi服务等于0的行
+    sub_cbg_df = sub_cbg_df[sub_cbg_df["remained_service"]>0]
+
+# 可视化
+plt.plot([each[1] for each in total_un_served_populations])
