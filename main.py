@@ -441,8 +441,8 @@ for key in disntance_importance_dict.keys():
 key_player_cbg_edge = sorted(disntance_importance_dict, key=disntance_importance_dict.get, reverse=True)
 
 # 可视化
-nx.draw(sub_queen)
-nx.draw_networkx_edges(key_player_cbg_edge[0],edge_color='r',)
+# nx.draw(sub_queen)
+# nx.draw_networkx_edges(key_player_cbg_edge[0],edge_color='r',)
 
 # 加入到词典里
 
@@ -461,8 +461,8 @@ nx.draw_networkx_edges(key_player_cbg_edge[0],edge_color='r',)
 # sub_cbg_df 记录了sub_cbg_df信息
 
 # sub_pattern["served_cbg", "served_cbg_distance"]转换成列表
-sub_pattern_df["served_cbg"] = sub_pattern_df["served_cbg"].map(lambda x: eval(x))
-sub_pattern_df["served_cbg_distance"] = sub_pattern_df["served_cbg_distance"].map(lambda x: eval(x))
+sub_pattern_df.loc[:,"served_cbg"] = sub_pattern_df["served_cbg"].map(lambda x: eval(x))
+sub_pattern_df.loc[:,"served_cbg_distance"] = sub_pattern_df["served_cbg_distance"].map(lambda x: eval(x))
 
 # 消除掉sub_pattern_df中，不在子图范围内的服务cbg
 def outsider_removal(x, sub_cbg_index):
@@ -498,8 +498,9 @@ def poi_attack(x, poi_delete):
     if not(poi_delete in x):
         return x
     else:
-        x.remove(poi_delete)
-        return x 
+        a = x.copy()
+        a.remove(poi_delete)
+        return a
 
 total_un_served_population = 0
 
@@ -507,16 +508,16 @@ poi_list = list(sub_pattern_df["placekey"])
 total_population = sub_cbg_df["POP2012"].sum()
 # 构造一个结果字典，键是placekey，值是重要性
 poi_important_dict = {key:0 for key in poi_list}
+sub_cbg_df["served_poi_distance2"] = sub_cbg_df["served_poi_distance"]
 
 for monte_times in range(500):
     sub_cbg_df_copy=sub_cbg_df.copy()
     random.shuffle(poi_list)
 
     # 删除一个poi，考虑served_poi_distance
-
     total_un_served_populations = []
     for poi_delete in poi_list:
-        # 删除一个poi
+        # 删除一个poi，更新poi服务关系
         sub_cbg_df_copy["served_poi_distance"] = sub_cbg_df_copy["served_poi_distance"].map(lambda x:poi_attack(x, poi_delete))
 
         # 得到cbg还有多少poi服务
