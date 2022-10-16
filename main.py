@@ -400,32 +400,57 @@ sub_distance = sub_distance[:,sub_graph_nodes]
 
 ## 拆除连接，导致travel距离上升  
 
+## 加入循环
+
+# 构造一个结果字典，键是连接，值是均值
+disntance_importance_dict = {key: 0 for key in list(sub_queen.edges)}
+
+
 # 计算距离，给一个现在的flow + 邻接矩阵 + 位移距离
-  
+for monte_times in range(500):
+    sub_queen_copy = sub_queen.copy()
+    initial_distance = all_graph_distance(sub_mobility_flow, sub_queen_copy, sub_distance, sub_graph_nodes)
 
-initial_distance = all_graph_distance(sub_mobility_flow, sub_queen, sub_distance, sub_graph_nodes)
+    ## 删除subqueen里的edge
+    post_attack_distance = []
+    # 删除一条边
+    sub_queen_copy_edges = list(sub_queen_copy.edges)
+    random.shuffle(sub_queen_copy_edges)
+    for each in sub_queen_copy_edges:
+        sub_queen_copy.remove_edge(each[0], each[1])
+        # 计算连通子图个数小于2则停止
+        if nx.number_connected_components(sub_queen_copy) >1:
+            break
+        post_attack_distance.append(all_graph_distance(sub_mobility_flow, sub_queen_copy, sub_distance, sub_graph_nodes))
 
-## 删除subqueen里的edge
-post_attack_distance = []
-# 删除一条边
-sub_queen_edges = list(sub_queen.edges)
-random.shuffle(sub_queen_edges)
-for each in sub_queen_edges:
-    sub_queen.remove_edge(each[0], each[1])
-    # 计算连通子图个数小于2则停止
-    if nx.number_connected_components(sub_queen) >1:
-        break
-    post_attack_distance.append(all_graph_distance(sub_mobility_flow, sub_queen, sub_distance, sub_graph_nodes))
+    post_attack_distance = post_attack_distance/initial_distance
+    # 由于initial_distance是np格式，所以post attack也变成np，便会列表
+    post_attack_distance = post_attack_distance.tolist()
 
-post_attack_distance = post_attack_distance/initial_distance
-# 由于initial_distance是np格式，所以post attack也变成np，便会列表
-post_attack_distance = post_attack_distance.tolist()
+    attack_result_dict = {sub_queen_copy_edges[idx]:post_attack_distance[idx] for idx in range(len(post_attack_distance))}
 
-attack_result_dict = {sub_queen_edges[idx]:post_attack_distance[idx] for idx in range(len(post_attack_distance))}
+    attack_result_dict = {list(attack_result_dict.keys())[idx]:((attack_result_dict[list(attack_result_dict.keys())[idx]])-(attack_result_dict[list(attack_result_dict.keys())[idx-1]])/(attack_result_dict[list(attack_result_dict.keys())[idx-1]]))for idx in range(1, len(attack_result_dict))}
 
-plt.plot(post_attack_distance)
-plt.xlabel("# of deleted edges")
-plt.ylabel("total travel time(km)")
+    for key in attack_result_dict.keys():
+        disntance_importance_dict[key] += attack_result_dict[key]
+
+for key in disntance_importance_dict.keys():
+    disntance_importance_dict[key] /= 500
+
+# 排序，找到key_player
+key_player_cbg_edge = sorted(disntance_importance_dict, key=disntance_importance_dict.get, reverse=True)
+
+# 可视化
+nx.draw(sub_queen)
+nx.draw_networkx_edges(key_player_cbg_edge[0],edge_color='r',)
+
+# 加入到词典里
+
+# 转化成前后值变化
+
+# plt.plot(post_attack_distance)
+# plt.xlabel("# of deleted edges")
+# plt.ylabel("total travel time(km)")
 
 ## 随即攻击一百次，每次只要删除这个边了，就计算导致图的上升趋势，如果断在他这了，记1000，最后单独统计1000的次数
 
@@ -449,9 +474,9 @@ sub_pattern_df["served_cbg_distance"] = sub_pattern_df["served_cbg_distance"].ma
 sub_pattern_df["served_cbg"] = sub_pattern_df["served_cbg"].map(lambda x: outsider_removal(x, sub_cbg_index))
 
 # 消除掉sub_cbg_df中不在子网范围内的poi (依据poi所在的cbg)
-sub_cbg_df_copy=sub_cbg_df.copy()
-sub_cbg_df_copy["served_poi"] = sub_cbg_df_copy["served_poi"].map(lambda x: eval(x))
-sub_cbg_df_copy["served_poi_distance"] = sub_cbg_df_copy["served_poi_distance"].map(lambda x: eval(x))
+
+sub_cbg_df["served_poi"] = sub_cbg_df["served_poi"].map(lambda x: eval(x))
+sub_cbg_df["served_poi_distance"] = sub_cbg_df["served_poi_distance"].map(lambda x: eval(x))
 
 def poi_removal(x, pattern_df, sub_cbg_index, cbg_df):
     cbg_index = [pattern_df[pattern_df["placekey"]==each]["poi_cbg"].values[0] for each in x]
@@ -463,16 +488,12 @@ def poi_removal(x, pattern_df, sub_cbg_index, cbg_df):
 
     return poi_final
 
-sub_cbg_df_copy["served_poi_distance"] = sub_cbg_df_copy["served_poi_distance"].map(lambda x: poi_removal(x, pattern_df, sub_cbg_index, cbg_df))
-sub_cbg_df_copy["served_poi"] = sub_cbg_df_copy["served_poi"].map(lambda x: poi_removal(x, pattern_df, sub_cbg_index, cbg_df))
+sub_cbg_df["served_poi_distance"] = sub_cbg_df["served_poi_distance"].map(lambda x: poi_removal(x, pattern_df, sub_cbg_index, cbg_df))
+sub_cbg_df["served_poi"] = sub_cbg_df["served_poi"].map(lambda x: poi_removal(x, pattern_df, sub_cbg_index, cbg_df))
+
+
 
 ## 开始攻击节点
-total_un_served_population = 0
-# 删除一个poi，考虑served_poi_distance
-poi_list = list(sub_pattern_df["placekey"])
-random.shuffle(poi_list)
-
-
 def poi_attack(x, poi_delete):
     if not(poi_delete in x):
         return x
@@ -480,23 +501,51 @@ def poi_attack(x, poi_delete):
         x.remove(poi_delete)
         return x 
 
-total_un_served_populations = []
-for poi_delete in poi_list:
-    sub_cbg_df_copy["served_poi_distance"] = sub_cbg_df_copy["served_poi_distance"].map(lambda x:poi_attack(x, poi_delete))
+total_un_served_population = 0
 
-    # 得到cbg还有多少poi服务
-    sub_cbg_df_copy["remained_service"] = sub_cbg_df_copy["served_poi_distance"].map(lambda x: len(x))
-
-    # 统计所有cbg剩余poi服务等于0的行
-    unserved_poi = sub_cbg_df_copy[sub_cbg_df_copy["remained_service"]==0]
-    total_un_served_population += unserved_poi["POP2012"].sum()
-    # 记录数据
-    total_un_served_populations.append([poi_delete, total_un_served_population])
-    # 删除所有cbg剩余poi服务等于0的行
-    sub_cbg_df_copy = sub_cbg_df_copy[sub_cbg_df_copy["remained_service"]>0]
-
-# 可视化
+poi_list = list(sub_pattern_df["placekey"])
 total_population = sub_cbg_df["POP2012"].sum()
+# 构造一个结果字典，键是placekey，值是重要性
+poi_important_dict = {key:0 for key in poi_list}
+
+for monte_times in range(500):
+    sub_cbg_df_copy=sub_cbg_df.copy()
+    random.shuffle(poi_list)
+
+    # 删除一个poi，考虑served_poi_distance
+
+    total_un_served_populations = []
+    for poi_delete in poi_list:
+        # 删除一个poi
+        sub_cbg_df_copy["served_poi_distance"] = sub_cbg_df_copy["served_poi_distance"].map(lambda x:poi_attack(x, poi_delete))
+
+        # 得到cbg还有多少poi服务
+        sub_cbg_df_copy["remained_service"] = sub_cbg_df_copy["served_poi_distance"].map(lambda x: len(x))
+
+        # 统计所有cbg剩余poi服务等于0的行
+        unserved_poi = sub_cbg_df_copy[sub_cbg_df_copy["remained_service"]==0]
+        total_un_served_population += unserved_poi["POP2012"].sum()
+        # 记录数据
+        total_un_served_populations.append([poi_delete, total_un_served_population])
+        # 删除所有cbg剩余poi服务等于0的行
+        sub_cbg_df_copy = sub_cbg_df_copy[sub_cbg_df_copy["remained_service"]>0]
+
+    # 依次删除poi的结果
+    poi_delete_result = [(each[1]/total_population) for each in total_un_served_populations]
+    poi_delete_result = [poi_delete_result[idx+1]-poi_delete_result[idx] for idx in range(len(poi_delete_result)-1)]
+
+    # 该次攻击结果
+    poi_attack_result = {poi_list[idx+1]:poi_delete_result[idx] for idx in range(len(poi_list)-1)}
+
+    # 加到总结果里
+    for key in poi_attack_result.keys():
+        poi_important_dict[key] += poi_attack_result[key]
+
+for key in poi_important_dict.keys():
+    poi_important_dict[key] /=500
+
+key_player_poi = sorted(poi_important_dict, key=poi_important_dict.get, reverse=True)
+
 plt.plot([each[1]/total_population for each in total_un_served_populations])
 plt.xlabel("# of delted poi")
 plt.ylabel(" unserviced population/total_pop")
