@@ -288,25 +288,123 @@ for i in range(row):
     for j in range(0,i+1):
         adjacency_flow[j,i] = adjacency_flow[i,j]
 
+adjacency_distance = cbg_adjacency.copy()
+row, col = adjacency_distance.shape
+for i in range(row):
+    for j in range(i+1, col):
+        if adjacency_distance[i, j]!=0:
+            adjacency_distance[i, j] = geopy.distance.geodesic((centroids[i,1], centroids[i,0]),(centroids[j,1], centroids[j,0])).km
 
-
+for i in range(row):
+    for j in range(0,i+1):
+        adjacency_distance[j,i] = adjacency_distance[i,j]
 ## adjacency travel distance 计算cbg间的活动距离
 
 ## 保存与处理数据
 pattern_df.to_csv(r"D:\Project\GNN_resilience\result\pattern.csv")
 cbg_df.to_csv(r"D:\Project\GNN_resilience\result\cbg.csv")
 np.savetxt(r"D:\Project\GNN_resilience\result\adjacency_flow.csv", adjacency_flow,delimiter=',')
+np.savetxt(r"D:\Project\GNN_resilience\result\adjacency_distance.csv", adjacency_distance,delimiter=',')
 
 
 #%% 从大的网络里采样得到导出子图induced graph
 random.seed(12345)
 
 # 随机产生一些节点编号，抽样的子图是联通的就要，不然就重新采集
-while True:
-    # 抽取节点种子 
-    random_nodes = np.random.randint(0,len(queen_graph.nodes),size=(1,100))
+# while True:
+#     # 抽取节点种子 
+#     # random_nodes = np.random.randint(0,len(queen_graph.nodes),size=(1,100))
 
-    sub_queen = queen_graph.subgraph(random_nodes).copy()
-    if nx.is_connected(sub_queen):
+#     sub_queen = queen_graph.subgraph(np.random.randint(0,len(queen_graph.nodes),size=100).tolist()).copy()
+#     if nx.is_connected(sub_queen):
+#         break
+
+# 产生第一个节点
+node_kick_off = random.randint(0,len(queen_graph.nodes))
+node_number=50
+def get_node_neighbors(node_kick_off, queen_graph, node_number):
+    total_node_number = 0
+    sample_nodes = []
+
+    hop = get_neigbors(queen_graph, node_kick_off, depth=1)[1]
+    sample_nodes = sample_nodes + hop
+
+    while total_node_number <= node_number:
+        random.shuffle(hop)
+        hop = [get_neigbors(queen_graph, each, depth=1)[1] for each in hop]        
+        hop = [each2 for each1 in hop for each2 in each1]
+
+        sample_nodes = sample_nodes + hop
+        total_node_number = len(sample_nodes)
+        
+    return list(set(sample_nodes))
+
+# 获取网络节点
+sub_graph_nodes = get_node_neighbors(node_kick_off, queen_graph, node_number)    
+
+# 获取子图
+sub_queen = queen_graph.subgraph(sub_graph_nodes).copy()
+
+# 获取子图对应的cbg数据
+sub_cbg_df = cbg_df.iloc[sub_graph_nodes, :]
+# sub_cbg_df = cbg_df.iloc[list(sub_queen.nodes), :]
+
+# 获取子图对应的poi数据
+def sub_poi(x, cbg_df, sub_cbg_df):
+    node_index = cbg_df[cbg_df["FIPS"]==x].index[0]
+    if node_index in sub_cbg_df.index:
+        return True
+    else: 
+        return False 
+
+sub_pattern_df = pattern_df[pattern_df["poi_cbg"].map(lambda x:sub_poi(x, cbg_df, sub_cbg_df))]  
+
+# 获取子图对应mobility flow
+sub_mobility_flow = adjacency_flow[sub_graph_nodes,:]
+sub_mobility_flow = sub_mobility_flow[:, sub_graph_nodes]
+# sub_mobility_flow = adjacency_flow[list(sub_queen.nodes),:]
+# sub_mobility_flow = sub_mobility_flow[:, list(sub_queen.nodes)]
+
+# 获取子图对应的距离矩阵
+sub_distance = adjacency_distance[sub_graph_nodes,:]
+sub_distance = sub_distance[:,sub_graph_nodes]
+# sub_distance = adjacency_distance[list(sub_queen.nodes),:]
+# sub_distance = sub_distance[:,list(sub_queen.nodes)]
+# %% 攻击网络
+
+## 拆除连接，导致travel距离上升  
+
+# 计算距离，给一个现在的flow + 邻接矩阵 + 位移距离
+def all_graph_distance(sub_mobility_flow, sub_queen, sub_distance, sub_graph_nodes):
+    row, col = sub_mobility_flow.shape
+    graph_total_distance = 0
+    for i in range(row):
+        for j in range(i+1, col):
+            # 每个连接上人的flow
+            if sub_mobility_flow[i,j]!=0:
+                flow_volume = sub_mobility_flow[i,j]
+                start_node = list(sub_queen.nodes)[i]
+                end_node = list(sub_queen.nodes)[j]
+                flow_path = nx.shortest_path(sub_queen, start_node, end_node)
+
+                # [sub_distance[list(sub_queen.nodes).index(flow_path[idx]),list(sub_queen.nodes).index(flow_path[idx+1])] for idx in range(len(flow_path)-1)]
+                node_index =[sub_graph_nodes.index(each) for each in flow_path] 
+                shortest_path_distance = [sub_distance[node_index[idx], node_index[idx+1]] for idx in range(len(node_index)-1)]
+
+                graph_total_distance += sum(shortest_path_distance)*flow_volume
+    return graph_total_distance    
+
+initial_distance = all_graph_distance(sub_mobility_flow, sub_queen, sub_distance, sub_graph_nodes)
+
+## 删除subqueen里的edge
+
+# 删除一条篇
+sub_queen_edges = list(sub_queen.edges)
+random.shuffle(sub_queen_edges)
+for each in sub_queen_edges:
+    sub_queen.remove_edge(each[0], each[1])
+    # 计算连通子图个数小于2则停止
+    if nx.number_connected_components(sub_queen) >1:
         break
-
+    print(all_graph_distance(sub_mobility_flow, sub_queen, sub_distance, sub_graph_nodes))
+# %%

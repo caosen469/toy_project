@@ -35,3 +35,7 @@ def func3():
     a[["latitude", "longitude"]]
     b = cbg_df[cbg_df["FIPS"]==a["poi_cbg"]]
     b["geometry"]
+
+# 产生随机节点
+def func4():
+    [len(get_node_neighbors(i, queen_graph, node_number)) for i in range(10)]
