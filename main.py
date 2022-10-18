@@ -1,3 +1,4 @@
+from copy import deepcopy
 import geopandas as gp 
 import numpy as np
 import pandas as pd
@@ -88,12 +89,18 @@ connected_nodes = [68,275,475,962,1610,344,84,856]
 for node in connected_nodes:
     queen_graph.add_edge(island_node, node)
 
+
+centroids = np.array([[each.xy[0][0], each.xy[1][0]] for each in cbg_df["centroid"]])
+##  添加边权
+for e in queen_graph.edges():
+    # 获取第一个cbg和第二个cbg得centroid计算距离
+    cbg1 = cbg_df.iloc[e[0]]["centroid"]
+    cbg2 = cbg_df.iloc[e[1]]["centroid"]
+    queen_graph[e[0]][e[1]]["weight"] = geopy.distance.geodesic((cbg1.xy[1][0], cbg1.xy[0][0]), (cbg2.xy[1][0], cbg2.xy[0][0])).km
+
 cbg_adjacency = np.array(nx.adjacency_matrix(queen_graph).todense())
 
-
-
 #  可视化
-centroids = np.array([[each.xy[0][0], each.xy[1][0]] for each in cbg_df["centroid"]])
 positions = dict(zip(queen_graph.nodes, centroids))
 ax = cbg_df.plot(linewidth=1, edgecolor="grey", facecolor="lightblue")
 ax.axis("off")
@@ -327,12 +334,13 @@ def all_graph_distance(sub_mobility_flow, sub_queen, sub_distance, sub_graph_nod
                 start_node = list(sub_queen.nodes)[i]
                 end_node = list(sub_queen.nodes)[j]
                 flow_path = nx.shortest_path(sub_queen, start_node, end_node)
+    
 
                 # [sub_distance[list(sub_queen.nodes).index(flow_path[idx]),list(sub_queen.nodes).index(flow_path[idx+1])] for idx in range(len(flow_path)-1)]
                 node_index =[sub_graph_nodes.index(each) for each in flow_path] 
                 shortest_path_distance = [sub_distance[node_index[idx], node_index[idx+1]] for idx in range(len(node_index)-1)]
 
-                graph_total_distance += sum(shortest_path_distance)*flow_volume
+                graph_total_distance += sum(shortest_path_distance)
     return graph_total_distance  
 
 travel_result_distance = pd.DataFrame(columns = ["initial_distance", ])
@@ -409,26 +417,31 @@ disntance_importance_dict = {key: 0 for key in list(sub_queen.edges)}
 
 
 # 计算距离，给一个现在的flow + 邻接矩阵 + 位移距离
-for monte_times in range(500):
+for monte_times in range(20):
     sub_queen_copy = sub_queen.copy()
     initial_distance = all_graph_distance(sub_mobility_flow, sub_queen_copy, sub_distance, sub_graph_nodes)
 
     ## 删除subqueen里的edge
     post_attack_distance = []
     # 删除一条边
-    sub_queen_copy_edges = list(sub_queen_copy.edges)
+    sub_queen_copy_edges = list(sub_queen_copy.edges).copy()
     random.shuffle(sub_queen_copy_edges)
-    for each in sub_queen_copy_edges:
+    for idx, each in enumerate(sub_queen_copy_edges):
         sub_queen_copy.remove_edge(each[0], each[1])
         # 计算连通子图个数小于2则停止
         if nx.number_connected_components(sub_queen_copy) >1:
             break
         post_attack_distance.append(all_graph_distance(sub_mobility_flow, sub_queen_copy, sub_distance, sub_graph_nodes))
-
+        if len(post_attack_distance)>=2:
+            post_attack_distance[-1] < post_attack_distance[-2]
     post_attack_distance = post_attack_distance/initial_distance
     # 由于initial_distance是np格式，所以post attack也变成np，便会列表
     post_attack_distance = post_attack_distance.tolist()
 
+    # plt.plot(post_attack_distance)
+    # plt.xlabel("# of deleted edges")
+    # plt.ylabel("total travel time(km)")
+    # plt.show()
     attack_result_dict = {sub_queen_copy_edges[idx]:post_attack_distance[idx] for idx in range(len(post_attack_distance))}
 
     attack_result_dict = {list(attack_result_dict.keys())[idx]:((attack_result_dict[list(attack_result_dict.keys())[idx]])-(attack_result_dict[list(attack_result_dict.keys())[idx-1]])/(attack_result_dict[list(attack_result_dict.keys())[idx-1]]))for idx in range(1, len(attack_result_dict))}
@@ -450,9 +463,7 @@ key_player_cbg_edge = sorted(disntance_importance_dict, key=disntance_importance
 
 # 转化成前后值变化
 
-# plt.plot(post_attack_distance)
-# plt.xlabel("# of deleted edges")
-# plt.ylabel("total travel time(km)")
+
 
 ## 随即攻击一百次，每次只要删除这个边了，就计算导致图的上升趋势，如果断在他这了，记1000，最后单独统计1000的次数
 
