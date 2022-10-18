@@ -333,14 +333,10 @@ def all_graph_distance(sub_mobility_flow, sub_queen, sub_distance, sub_graph_nod
                 flow_volume = sub_mobility_flow[i,j]
                 start_node = list(sub_queen.nodes)[i]
                 end_node = list(sub_queen.nodes)[j]
-                flow_path = nx.shortest_path(sub_queen, start_node, end_node)
-    
-
-                # [sub_distance[list(sub_queen.nodes).index(flow_path[idx]),list(sub_queen.nodes).index(flow_path[idx+1])] for idx in range(len(flow_path)-1)]
-                node_index =[sub_graph_nodes.index(each) for each in flow_path] 
-                shortest_path_distance = [sub_distance[node_index[idx], node_index[idx+1]] for idx in range(len(node_index)-1)]
-
-                graph_total_distance += sum(shortest_path_distance)
+                # flow_path = nx.shortest_path(sub_queen, start_node, end_node)
+                # node_index =[sub_graph_nodes.index(each) for each in flow_path] 
+                # shortest_path_distance = [sub_distance[node_index[idx], node_index[idx+1]] for idx in range(len(node_index)-1)]
+                graph_total_distance += nx.shortest_path_length(sub_queen, start_node, end_node, weight="weight")
     return graph_total_distance  
 
 travel_result_distance = pd.DataFrame(columns = ["initial_distance", ])
@@ -417,7 +413,7 @@ disntance_importance_dict = {key: 0 for key in list(sub_queen.edges)}
 
 
 # 计算距离，给一个现在的flow + 邻接矩阵 + 位移距离
-for monte_times in range(20):
+for monte_times in range(500):
     sub_queen_copy = sub_queen.copy()
     initial_distance = all_graph_distance(sub_mobility_flow, sub_queen_copy, sub_distance, sub_graph_nodes)
 
@@ -434,9 +430,9 @@ for monte_times in range(20):
         post_attack_distance.append(all_graph_distance(sub_mobility_flow, sub_queen_copy, sub_distance, sub_graph_nodes))
         if len(post_attack_distance)>=2:
             post_attack_distance[-1] < post_attack_distance[-2]
-    post_attack_distance = post_attack_distance/initial_distance
+    post_attack_distance = [each/initial_distance for each in post_attack_distance]
     # 由于initial_distance是np格式，所以post attack也变成np，便会列表
-    post_attack_distance = post_attack_distance.tolist()
+    # post_attack_distance = post_attack_distance.tolist()
 
     # plt.plot(post_attack_distance)
     # plt.xlabel("# of deleted edges")

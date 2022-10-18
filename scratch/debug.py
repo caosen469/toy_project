@@ -83,5 +83,5 @@ def shortest_path_dict(sub_mobility_flow, sub_queen, sub_distance, sub_graph_nod
 
                
     return result_dict 
-a = (sub_mobility_flow, sub_queens[-2], sub_distance, sub_graph_nodes)
-a = (sub_mobility_flow, sub_queens[-1], sub_distance, sub_graph_nodes)
+a = shortest_path_dict(sub_mobility_flow, sub_queens[-2], sub_distance, sub_graph_nodes)
+b = shortest_path_dict(sub_mobility_flow, sub_queens[-1], sub_distance, sub_graph_nodes)
