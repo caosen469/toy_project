@@ -37,7 +37,7 @@ def get_latitude(x, poi_df):
 # os.environ['PROJ_LIB']=r'D:\Users\19688\Anaconda2\envs\geopands2\Lib\site-packages\osgeo\data\proj'
 #%% 读取目标county的CBG数据
 
-cbg_df = gp.read_file(r"D:\Project\GNN_resilience\data\texas_cbg\cbg_1\Export_Output.shp") # 读取整个德克萨斯州的CBG的shapefile
+# cbg_df = gp.read_file(r"D:\Project\GNN_resilience\data\texas_cbg\cbg_1\Export_Output.shp") # 读取整个德克萨斯州的CBG的shapefile
 
 ## cbg_df["FIPS"] 是十二位的cbg fips code，可以用来筛选出位于Harris County的 cbg，数据格式是字符串
 
@@ -336,7 +336,7 @@ def all_graph_distance(sub_mobility_flow, sub_queen, sub_distance, sub_graph_nod
                 # flow_path = nx.shortest_path(sub_queen, start_node, end_node)
                 # node_index =[sub_graph_nodes.index(each) for each in flow_path] 
                 # shortest_path_distance = [sub_distance[node_index[idx], node_index[idx+1]] for idx in range(len(node_index)-1)]
-                graph_total_distance += nx.shortest_path_length(sub_queen, start_node, end_node, weight="weight")
+                graph_total_distance += nx.shortest_path_length(sub_queen, start_node, end_node, weight="weight") * flow_volume
     return graph_total_distance  
 
 travel_result_distance = pd.DataFrame(columns = ["initial_distance", ])
