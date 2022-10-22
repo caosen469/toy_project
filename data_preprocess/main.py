@@ -492,7 +492,7 @@ abs_value = {key:{"value_label":disntance_importance_dict[key]} for key in disnt
 nx.set_edge_attributes(sub_queen, abs_value)
 # 保存图
 save_path = r"D:\Project\GNN_resilience\data\training_data"
-file_path = save_path + str(len(os.listdir(save_path))-1) + ".gpickle"
+file_path = save_path + "\\" +str(len(os.listdir(save_path))-1) + ".gpickle"
 nx.write_gpickle(sub_queen, file_path)
 # 保存图的结构
 # 保存节点属性
