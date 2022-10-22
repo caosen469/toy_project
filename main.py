@@ -15,7 +15,7 @@ import shapely
 import ast
 from scipy.spatial.distance import cdist
 import random
-
+import re
 
 ####################################################################################################################################
 
@@ -107,7 +107,7 @@ ax.axis("off")
 nx.draw(queen_graph, positions, ax=ax, node_size=5, node_color="r")
 plt.show()
 
-# # %% poi数据预处理
+# %% poi数据预处理
 
 # ## 读取poi parttern数据
 # # pattern_df = pd.read_csv(r"D:\software\清华云盘\download\mobility\03\21\patterns-part1.csv", nrows=100)
@@ -308,7 +308,7 @@ def hop_neighbor(x, queen_graph, cbg_df):
 # for i in range(row):
 #     for j in range(0,i+1):
 #         adjacency_distance[j,i] = adjacency_distance[i,j]
-## adjacency travel distance 计算cbg间的活动距离
+# adjacency travel distance 计算cbg间的活动距离
 
 ## 保存与处理数据
 # pattern_df.to_csv(r"D:\Project\GNN_resilience\result\pattern.csv")
@@ -451,6 +451,55 @@ for key in disntance_importance_dict.keys():
 # 排序，找到key_player
 key_player_cbg_edge = sorted(disntance_importance_dict, key=disntance_importance_dict.get, reverse=True)
 
+####################################################################################################################################
+## 保存图的数据
+data_save_path = r"D:\Project\GNN_resilience\data\training_data"
+
+# networkx 添加节点属性
+# 字典键是对应的节点编号，值是一系列属性
+node_value_dict = {}
+for idx in zip(list(sub_queen.nodes)): 
+    idx = idx[0]
+    # 获取对应行数据
+    row = sub_cbg_df[sub_cbg_df.index==idx]
+    row_population = row["POP2012"].values[0]
+    # 获取经纬度
+    row_xy = re.findall("\d+\.?\d*", row["centroid"].values[0])
+    row_latitude = float(row_xy[1])
+    row_longitude = float(row_xy[0])
+    value_dict = {"population": row_population, "latitude": row_latitude, "longitude": row_longitude}
+    node_value_dict[idx] = value_dict
+
+nx.set_node_attributes(sub_queen, node_value_dict)
+
+# 存储边的数据
+edge_value_dict = {}
+for idx in zip(list(sub_queen.edges)):
+    idx = idx[0]
+    start_node = sub_graph_nodes.index(idx[0])
+    end_node = sub_graph_nodes.index(idx[1])
+    flow = sub_mobility_flow[start_node, end_node]
+    value_dict = {'mobility_flow': flow}
+    edge_value_dict[idx] = value_dict
+nx.set_edge_attributes(sub_queen, edge_value_dict)
+
+# 存储边的lable
+# 排序值
+edge_rank_label_dict = {each:{"rank_label":idx+1} for idx, each in enumerate(key_player_cbg_edge)}
+nx.set_edge_attributes(sub_queen, edge_rank_label_dict)
+# 绝对值
+abs_value = {key:{"value_label":disntance_importance_dict[key]} for key in disntance_importance_dict.keys()}
+nx.set_edge_attributes(sub_queen, abs_value)
+# 保存图
+save_path = r"D:\Project\GNN_resilience\data\training_data"
+file_path = save_path + str(len(os.listdir(save_path))-1) + ".gpickle"
+nx.write_gpickle(sub_queen, file_path)
+# 保存图的结构
+# 保存节点属性
+# 保存边的属性
+# 保存边的属性
+
+####################################################################################################################################
 # 可视化
 # nx.draw(sub_queen)
 # nx.draw_networkx_edges(key_player_cbg_edge[0],edge_color='r',)
