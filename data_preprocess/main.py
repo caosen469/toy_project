@@ -102,10 +102,10 @@ cbg_adjacency = np.array(nx.adjacency_matrix(queen_graph).todense())
 
 #  可视化
 positions = dict(zip(queen_graph.nodes, centroids))
-ax = cbg_df.plot(linewidth=1, edgecolor="grey", facecolor="lightblue")
-ax.axis("off")
-nx.draw(queen_graph, positions, ax=ax, node_size=5, node_color="r")
-plt.show()
+# ax = cbg_df.plot(linewidth=1, edgecolor="grey", facecolor="lightblue")
+# ax.axis("off")
+# nx.draw(queen_graph, positions, ax=ax, node_size=5, node_color="r")
+# plt.show()
 
 # %% poi数据预处理
 
@@ -320,6 +320,7 @@ pattern_df = pd.read_csv(r"D:\Project\GNN_resilience\result\pattern.csv")
 cbg_df = pd.read_csv(r"D:\Project\GNN_resilience\result\cbg.csv")
 adjacency_flow = np.loadtxt(r"D:\Project\GNN_resilience\result\adjacency_flow.csv",delimiter=',')
 adjacency_distance = np.loadtxt(r"D:\Project\GNN_resilience\result\adjacency_distance.csv",delimiter=',')
+
 ####################################################################################################################################
 #%% 从大的网络里采样得到导出子图induced graph
 random.seed(12345)
@@ -339,7 +340,8 @@ def all_graph_distance(sub_mobility_flow, sub_queen, sub_distance, sub_graph_nod
                 graph_total_distance += nx.shortest_path_length(sub_queen, start_node, end_node, weight="weight") * flow_volume
     return graph_total_distance  
 
-travel_result_distance = pd.DataFrame(columns = ["initial_distance", ])
+# travel_result_distance = pd.DataFrame(columns = ["initial_distance", ])
+
 # 随机产生一些节点编号，抽样的子图是联通的就要，不然就重新采集
 # while True:
 #     # 抽取节点种子 
@@ -350,150 +352,173 @@ travel_result_distance = pd.DataFrame(columns = ["initial_distance", ])
 #         break
 ####################################################################################################################################
 # 产生第一个节点
-node_kick_off = random.randint(0,len(queen_graph.nodes))
-node_number=50
-def get_node_neighbors(node_kick_off, queen_graph, node_number):
-    total_node_number = 0
-    sample_nodes = []
+for graph_number in range(100):
+    node_kick_off = random.randint(0,len(queen_graph.nodes))
+    node_number=50
+    def get_node_neighbors(node_kick_off, queen_graph, node_number):
+        total_node_number = 0
+        sample_nodes = []
 
-    hop = get_neigbors(queen_graph, node_kick_off, depth=1)[1]
-    sample_nodes = sample_nodes + hop
-
-    while total_node_number <= node_number:
-        random.shuffle(hop)
-        hop = [get_neigbors(queen_graph, each, depth=1)[1] for each in hop]        
-        hop = [each2 for each1 in hop for each2 in each1]
-
+        hop = get_neigbors(queen_graph, node_kick_off, depth=1)[1]
         sample_nodes = sample_nodes + hop
-        total_node_number = len(sample_nodes)
-        
-    return list(set(sample_nodes))
 
-# 获取网络节点
-sub_graph_nodes = get_node_neighbors(node_kick_off, queen_graph, node_number)    
+        while total_node_number <= node_number:
+            random.shuffle(hop)
+            hop = [get_neigbors(queen_graph, each, depth=1)[1] for each in hop]        
+            hop = [each2 for each1 in hop for each2 in each1]
 
-# 获取子图
-sub_queen = queen_graph.subgraph(sub_graph_nodes).copy()
+            sample_nodes = sample_nodes + hop
+            total_node_number = len(sample_nodes)
+            
+        return list(set(sample_nodes))
 
-# 获取子图对应的cbg数据
-sub_cbg_df = cbg_df.iloc[sub_graph_nodes, :]
-# sub_cbg_df = cbg_df.iloc[list(sub_queen.nodes), :]
+    # 获取网络节点
+    sub_graph_nodes = get_node_neighbors(node_kick_off, queen_graph, node_number)    
 
-# 获取子图对应的poi数据
-def sub_poi(x, cbg_df, sub_cbg_df):
-    node_index = cbg_df[cbg_df["FIPS"]==x].index[0]
-    if node_index in sub_cbg_df.index:
-        return True
-    else: 
-        return False 
+    # 获取子图
+    sub_queen = queen_graph.subgraph(sub_graph_nodes).copy()
 
-sub_pattern_df = pattern_df[pattern_df["poi_cbg"].map(lambda x:sub_poi(x, cbg_df, sub_cbg_df))]  
+    # 获取子图对应的cbg数据
+    sub_cbg_df = cbg_df.iloc[sub_graph_nodes, :]
+    # sub_cbg_df = cbg_df.iloc[list(sub_queen.nodes), :]
 
-# 获取子图对应mobility flow
-sub_mobility_flow = adjacency_flow[sub_graph_nodes,:]
-sub_mobility_flow = sub_mobility_flow[:, sub_graph_nodes]
-# sub_mobility_flow = adjacency_flow[list(sub_queen.nodes),:]
-# sub_mobility_flow = sub_mobility_flow[:, list(sub_queen.nodes)]
+    # 获取子图对应的poi数据
+    def sub_poi(x, cbg_df, sub_cbg_df):
+        node_index = cbg_df[cbg_df["FIPS"]==x].index[0]
+        if node_index in sub_cbg_df.index:
+            return True
+        else: 
+            return False 
 
-# 获取子图对应的距离矩阵
-sub_distance = adjacency_distance[sub_graph_nodes,:]
-sub_distance = sub_distance[:,sub_graph_nodes]
-# sub_distance = adjacency_distance[list(sub_queen.nodes),:]
-# sub_distance = sub_distance[:,list(sub_queen.nodes)]
+    sub_pattern_df = pattern_df[pattern_df["poi_cbg"].map(lambda x:sub_poi(x, cbg_df, sub_cbg_df))]  
 
-####################################################################################################################################
-# %% 攻击网络
+    # 获取子图对应mobility flow
+    sub_mobility_flow = adjacency_flow[sub_graph_nodes,:]
+    sub_mobility_flow = sub_mobility_flow[:, sub_graph_nodes]
+    # sub_mobility_flow = adjacency_flow[list(sub_queen.nodes),:]
+    # sub_mobility_flow = sub_mobility_flow[:, list(sub_queen.nodes)]
 
-## 拆除连接，导致travel距离上升  
+    # 获取子图对应的距离矩阵
+    sub_distance = adjacency_distance[sub_graph_nodes,:]
+    sub_distance = sub_distance[:,sub_graph_nodes]
+    # sub_distance = adjacency_distance[list(sub_queen.nodes),:]
+    # sub_distance = sub_distance[:,list(sub_queen.nodes)]
 
-## 加入循环
+    ####################################################################################################################################
+    # %% 攻击网络
 
-# 构造一个结果字典，键是连接，值是均值
-disntance_importance_dict = {key: 0 for key in list(sub_queen.edges)}
+    ## 拆除连接，导致travel距离上升  
+
+    ## 加入循环
+
+    # 构造一个结果字典，键是连接，值是均值
+    disntance_importance_dict = {key: 0 for key in list(sub_queen.edges)}
 
 
-# 计算距离，给一个现在的flow + 邻接矩阵 + 位移距离
-for monte_times in range(500):
-    sub_queen_copy = sub_queen.copy()
-    initial_distance = all_graph_distance(sub_mobility_flow, sub_queen_copy, sub_distance, sub_graph_nodes)
+    # 计算距离，给一个现在的flow + 邻接矩阵 + 位移距离
+    for monte_times in range(500):
+        sub_queen_copy = sub_queen.copy()
+        initial_distance = all_graph_distance(sub_mobility_flow, sub_queen_copy, sub_distance, sub_graph_nodes)
 
-    ## 删除subqueen里的edge
-    post_attack_distance = []
-    # 删除一条边
-    sub_queen_copy_edges = list(sub_queen_copy.edges).copy()
-    random.shuffle(sub_queen_copy_edges)
-    for idx, each in enumerate(sub_queen_copy_edges):
-        sub_queen_copy.remove_edge(each[0], each[1])
-        # 计算连通子图个数小于2则停止
-        if nx.number_connected_components(sub_queen_copy) >1:
-            break
-        post_attack_distance.append(all_graph_distance(sub_mobility_flow, sub_queen_copy, sub_distance, sub_graph_nodes))
-        if len(post_attack_distance)>=2:
-            post_attack_distance[-1] < post_attack_distance[-2]
-    post_attack_distance = [each/initial_distance for each in post_attack_distance]
-    # 由于initial_distance是np格式，所以post attack也变成np，便会列表
-    # post_attack_distance = post_attack_distance.tolist()
+        ## 删除subqueen里的edge
+        post_attack_distance = []
+        # 删除一条边
+        sub_queen_copy_edges = list(sub_queen_copy.edges).copy()
+        random.shuffle(sub_queen_copy_edges)
+        for idx, each in enumerate(sub_queen_copy_edges):
+            sub_queen_copy.remove_edge(each[0], each[1])
+            # 计算连通子图个数小于2则停止
+            if nx.number_connected_components(sub_queen_copy) >1:
+                break
+            post_attack_distance.append(all_graph_distance(sub_mobility_flow, sub_queen_copy, sub_distance, sub_graph_nodes))
+            if len(post_attack_distance)>=2:
+                post_attack_distance[-1] < post_attack_distance[-2]
+        post_attack_distance = [each/initial_distance for each in post_attack_distance]
+        # 由于initial_distance是np格式，所以post attack也变成np，便会列表
+        # post_attack_distance = post_attack_distance.tolist()
 
-    # plt.plot(post_attack_distance)
-    # plt.xlabel("# of deleted edges")
-    # plt.ylabel("total travel time(km)")
-    # plt.show()
-    attack_result_dict = {sub_queen_copy_edges[idx]:post_attack_distance[idx] for idx in range(len(post_attack_distance))}
+        # plt.plot(post_attack_distance)
+        # plt.xlabel("# of deleted edges")
+        # plt.ylabel("total travel time(km)")
+        # plt.show()
+        attack_result_dict = {sub_queen_copy_edges[idx]:post_attack_distance[idx] for idx in range(len(post_attack_distance))}
 
-    attack_result_dict = {list(attack_result_dict.keys())[idx]:((attack_result_dict[list(attack_result_dict.keys())[idx]])-(attack_result_dict[list(attack_result_dict.keys())[idx-1]])/(attack_result_dict[list(attack_result_dict.keys())[idx-1]]))for idx in range(1, len(attack_result_dict))}
+        attack_result_dict = {list(attack_result_dict.keys())[idx]:((attack_result_dict[list(attack_result_dict.keys())[idx]])-(attack_result_dict[list(attack_result_dict.keys())[idx-1]])/(attack_result_dict[list(attack_result_dict.keys())[idx-1]]))for idx in range(1, len(attack_result_dict))}
 
-    for key in attack_result_dict.keys():
-        disntance_importance_dict[key] += attack_result_dict[key]
+        for key in attack_result_dict.keys():
+            disntance_importance_dict[key] += attack_result_dict[key]
 
-for key in disntance_importance_dict.keys():
-    disntance_importance_dict[key] /= 500
+    for key in disntance_importance_dict.keys():
+        disntance_importance_dict[key] /= 500
 
-# 排序，找到key_player
-key_player_cbg_edge = sorted(disntance_importance_dict, key=disntance_importance_dict.get, reverse=True)
+    # 排序，找到key_player
+    key_player_cbg_edge = sorted(disntance_importance_dict, key=disntance_importance_dict.get, reverse=True)
 
-####################################################################################################################################
-## 保存图的数据
-data_save_path = r"D:\Project\GNN_resilience\data\training_data"
+    ####################################################################################################################################
+    ## 保存图的数据
+    data_save_path = r"D:\Project\GNN_resilience\data\training_data"
 
-# networkx 添加节点属性
-# 字典键是对应的节点编号，值是一系列属性
-node_value_dict = {}
-for idx in zip(list(sub_queen.nodes)): 
-    idx = idx[0]
-    # 获取对应行数据
-    row = sub_cbg_df[sub_cbg_df.index==idx]
-    row_population = row["POP2012"].values[0]
-    # 获取经纬度
-    row_xy = re.findall("\d+\.?\d*", row["centroid"].values[0])
-    row_latitude = float(row_xy[1])
-    row_longitude = float(row_xy[0])
-    value_dict = {"population": row_population, "latitude": row_latitude, "longitude": row_longitude}
-    node_value_dict[idx] = value_dict
+    # networkx 添加节点属性
+    # 字典键是对应的节点编号，值是一系列属性
+    node_value_dict = {}
+    for idx in zip(list(sub_queen.nodes)): 
+        idx = idx[0]
+        # 获取对应行数据
+        row = sub_cbg_df[sub_cbg_df.index==idx]
+        row_population = row["POP2012"].values[0]
+        # 获取经纬度
+        row_xy = re.findall("\d+\.?\d*", row["centroid"].values[0])
+        row_latitude = float(row_xy[1])
+        row_longitude = float(row_xy[0])
+        value_dict = {"population": row_population, "latitude": row_latitude, "longitude": row_longitude}
+        node_value_dict[idx] = value_dict
 
-nx.set_node_attributes(sub_queen, node_value_dict)
+    nx.set_node_attributes(sub_queen, node_value_dict)
 
-# 存储边的数据
-edge_value_dict = {}
-for idx in zip(list(sub_queen.edges)):
-    idx = idx[0]
-    start_node = sub_graph_nodes.index(idx[0])
-    end_node = sub_graph_nodes.index(idx[1])
-    flow = sub_mobility_flow[start_node, end_node]
-    value_dict = {'mobility_flow': flow}
-    edge_value_dict[idx] = value_dict
-nx.set_edge_attributes(sub_queen, edge_value_dict)
+    # 存储边的数据
+    edge_value_dict = {}
+    for idx in zip(list(sub_queen.edges)):
+        idx = idx[0]
+        start_node = sub_graph_nodes.index(idx[0])
+        end_node = sub_graph_nodes.index(idx[1])
+        flow = sub_mobility_flow[start_node, end_node]
+        value_dict = {'mobility_flow': flow}
+        edge_value_dict[idx] = value_dict
+    nx.set_edge_attributes(sub_queen, edge_value_dict)
 
-# 存储边的lable
-# 排序值
-edge_rank_label_dict = {each:{"rank_label":idx+1} for idx, each in enumerate(key_player_cbg_edge)}
-nx.set_edge_attributes(sub_queen, edge_rank_label_dict)
-# 绝对值
-abs_value = {key:{"value_label":disntance_importance_dict[key]} for key in disntance_importance_dict.keys()}
-nx.set_edge_attributes(sub_queen, abs_value)
-# 保存图
-save_path = r"D:\Project\GNN_resilience\data\training_data"
-file_path = save_path + "\\" +str(len(os.listdir(save_path))-1) + ".gpickle"
-nx.write_gpickle(sub_queen, file_path)
+    # 存储边的lable
+    # 排序值
+    edge_rank_label_dict = {each:{"rank_label":idx+1} for idx, each in enumerate(key_player_cbg_edge)}
+    nx.set_edge_attributes(sub_queen, edge_rank_label_dict)
+    # 绝对值
+    abs_value = {key:{"value_label":disntance_importance_dict[key]} for key in disntance_importance_dict.keys()}
+    nx.set_edge_attributes(sub_queen, abs_value)
+    # 保存图
+    save_path = r"D:\Project\GNN_resilience\data\training_data"
+    file_path = save_path + "\\" +str(len(os.listdir(save_path))) + ".gpickle"
+    print(file_path)
+    nx.write_gpickle(sub_queen, file_path)
+
+    ## 画图
+    pos = nx.spring_layout(sub_queen)
+    important_edges = key_player_cbg_edge[:3]
+    path_edges = important_edges
+
+    # 画普通图
+    plt.figure(figsize=(20,10))
+    nx.draw_networkx_nodes(sub_queen, pos, nodelist=sub_queen.nodes)
+    nx.draw_networkx_edges(sub_queen, pos, edgelist=set(sub_queen.edges)-set(path_edges), connectionstyle='arc3, rad = 0.3')
+
+    # 画关键图
+    nx.draw_networkx_edges(sub_queen,pos,edgelist=path_edges,edge_color='r', width=3, connectionstyle='arc3, rad = 0.3')
+
+    # 画边权
+    edge_labels = nx.get_edge_attributes(sub_queen, 'mobility_flow')
+    nx.draw_networkx_edge_labels(sub_queen, pos, edge_labels)
+
+    plt.savefig("D:\\Project\\GNN_resilience\\data\\training_data_fig\\" + str(len(os.listdir(save_path)))+".png")
+    plt.close()
+
 # 保存图的结构
 # 保存节点属性
 # 保存边的属性
@@ -513,97 +538,97 @@ nx.write_gpickle(sub_queen, file_path)
 ## 随即攻击一百次，每次只要删除这个边了，就计算导致图的上升趋势，如果断在他这了，记1000，最后单独统计1000的次数
 
 ####################################################################################################################################
-# %% 攻击POI节点
+# # %% 攻击POI节点
 
-# sub_pattern_df记录了poi信息
-# sub_cbg_df 记录了sub_cbg_df信息
+# # sub_pattern_df记录了poi信息
+# # sub_cbg_df 记录了sub_cbg_df信息
 
-# sub_pattern["served_cbg", "served_cbg_distance"]转换成列表
-sub_pattern_df.loc[:,"served_cbg"] = sub_pattern_df["served_cbg"].map(lambda x: eval(x))
-sub_pattern_df.loc[:,"served_cbg_distance"] = sub_pattern_df["served_cbg_distance"].map(lambda x: eval(x))
+# # sub_pattern["served_cbg", "served_cbg_distance"]转换成列表
+# sub_pattern_df.loc[:,"served_cbg"] = sub_pattern_df["served_cbg"].map(lambda x: eval(x))
+# sub_pattern_df.loc[:,"served_cbg_distance"] = sub_pattern_df["served_cbg_distance"].map(lambda x: eval(x))
 
-# 消除掉sub_pattern_df中，不在子图范围内的服务cbg
-def outsider_removal(x, sub_cbg_index):
-    return [each for each in x if each in sub_cbg_index]
-# 在区域内的cbg
-sub_cbg_index = list(sub_cbg_df.index)
-sub_pattern_df["served_cbg_distance"] = sub_pattern_df["served_cbg_distance"].map(lambda x: outsider_removal(x, sub_cbg_index))
+# # 消除掉sub_pattern_df中，不在子图范围内的服务cbg
+# def outsider_removal(x, sub_cbg_index):
+#     return [each for each in x if each in sub_cbg_index]
+# # 在区域内的cbg
+# sub_cbg_index = list(sub_cbg_df.index)
+# sub_pattern_df["served_cbg_distance"] = sub_pattern_df["served_cbg_distance"].map(lambda x: outsider_removal(x, sub_cbg_index))
 
-sub_pattern_df["served_cbg"] = sub_pattern_df["served_cbg"].map(lambda x: outsider_removal(x, sub_cbg_index))
+# sub_pattern_df["served_cbg"] = sub_pattern_df["served_cbg"].map(lambda x: outsider_removal(x, sub_cbg_index))
 
-# 消除掉sub_cbg_df中不在子网范围内的poi (依据poi所在的cbg)
-sub_cbg_df["served_poi"] = sub_cbg_df["served_poi"].map(lambda x: eval(x))
-sub_cbg_df["served_poi_distance"] = sub_cbg_df["served_poi_distance"].map(lambda x: eval(x))
+# # 消除掉sub_cbg_df中不在子网范围内的poi (依据poi所在的cbg)
+# sub_cbg_df["served_poi"] = sub_cbg_df["served_poi"].map(lambda x: eval(x))
+# sub_cbg_df["served_poi_distance"] = sub_cbg_df["served_poi_distance"].map(lambda x: eval(x))
 
-def poi_removal(x, pattern_df, sub_cbg_index, cbg_df):
-    cbg_index = [pattern_df[pattern_df["placekey"]==each]["poi_cbg"].values[0] for each in x]
-    cbg_index = [cbg_df[cbg_df["FIPS"]==each].index.values[0] for each in cbg_index]
+# def poi_removal(x, pattern_df, sub_cbg_index, cbg_df):
+#     cbg_index = [pattern_df[pattern_df["placekey"]==each]["poi_cbg"].values[0] for each in x]
+#     cbg_index = [cbg_df[cbg_df["FIPS"]==each].index.values[0] for each in cbg_index]
     
-    # poi_cbg_pair = [[cbg_index[idx], x[idx]]for idx in range(len(x))]
+#     # poi_cbg_pair = [[cbg_index[idx], x[idx]]for idx in range(len(x))]
 
-    poi_final = [x[idx] for idx in range(len(x)) if cbg_index[idx] in sub_cbg_index]
+#     poi_final = [x[idx] for idx in range(len(x)) if cbg_index[idx] in sub_cbg_index]
 
-    return poi_final
+#     return poi_final
 
-sub_cbg_df["served_poi_distance"] = sub_cbg_df["served_poi_distance"].map(lambda x: poi_removal(x, pattern_df, sub_cbg_index, cbg_df))
-sub_cbg_df["served_poi"] = sub_cbg_df["served_poi"].map(lambda x: poi_removal(x, pattern_df, sub_cbg_index, cbg_df))
+# sub_cbg_df["served_poi_distance"] = sub_cbg_df["served_poi_distance"].map(lambda x: poi_removal(x, pattern_df, sub_cbg_index, cbg_df))
+# sub_cbg_df["served_poi"] = sub_cbg_df["served_poi"].map(lambda x: poi_removal(x, pattern_df, sub_cbg_index, cbg_df))
 
 
 
-## 开始攻击节点
-def poi_attack(x, poi_delete):
-    if not(poi_delete in x):
-        return x
-    else:
-        a = x.copy()
-        a.remove(poi_delete)
-        return a
+# ## 开始攻击节点
+# def poi_attack(x, poi_delete):
+#     if not(poi_delete in x):
+#         return x
+#     else:
+#         a = x.copy()
+#         a.remove(poi_delete)
+#         return a
 
-total_un_served_population = 0
+# total_un_served_population = 0
 
-poi_list = list(sub_pattern_df["placekey"])
-total_population = sub_cbg_df["POP2012"].sum()
-# 构造一个结果字典，键是placekey，值是重要性
-poi_important_dict = {key:0 for key in poi_list}
-sub_cbg_df["served_poi_distance2"] = sub_cbg_df["served_poi_distance"]
+# poi_list = list(sub_pattern_df["placekey"])
+# total_population = sub_cbg_df["POP2012"].sum()
+# # 构造一个结果字典，键是placekey，值是重要性
+# poi_important_dict = {key:0 for key in poi_list}
+# sub_cbg_df["served_poi_distance2"] = sub_cbg_df["served_poi_distance"]
 
-for monte_times in range(500):
-    sub_cbg_df_copy=sub_cbg_df.copy()
-    random.shuffle(poi_list)
+# for monte_times in range(500):
+#     sub_cbg_df_copy=sub_cbg_df.copy()
+#     random.shuffle(poi_list)
 
-    # 删除一个poi，考虑served_poi_distance
-    total_un_served_populations = []
-    for poi_delete in poi_list:
-        # 删除一个poi，更新poi服务关系
-        sub_cbg_df_copy["served_poi_distance"] = sub_cbg_df_copy["served_poi_distance"].map(lambda x:poi_attack(x, poi_delete))
+#     # 删除一个poi，考虑served_poi_distance
+#     total_un_served_populations = []
+#     for poi_delete in poi_list:
+#         # 删除一个poi，更新poi服务关系
+#         sub_cbg_df_copy["served_poi_distance"] = sub_cbg_df_copy["served_poi_distance"].map(lambda x:poi_attack(x, poi_delete))
 
-        # 得到cbg还有多少poi服务
-        sub_cbg_df_copy["remained_service"] = sub_cbg_df_copy["served_poi_distance"].map(lambda x: len(x))
+#         # 得到cbg还有多少poi服务
+#         sub_cbg_df_copy["remained_service"] = sub_cbg_df_copy["served_poi_distance"].map(lambda x: len(x))
 
-        # 统计所有cbg剩余poi服务等于0的行
-        unserved_poi = sub_cbg_df_copy[sub_cbg_df_copy["remained_service"]==0]
-        total_un_served_population += unserved_poi["POP2012"].sum()
-        # 记录数据
-        total_un_served_populations.append([poi_delete, total_un_served_population])
-        # 删除所有cbg剩余poi服务等于0的行
-        sub_cbg_df_copy = sub_cbg_df_copy[sub_cbg_df_copy["remained_service"]>0]
+#         # 统计所有cbg剩余poi服务等于0的行
+#         unserved_poi = sub_cbg_df_copy[sub_cbg_df_copy["remained_service"]==0]
+#         total_un_served_population += unserved_poi["POP2012"].sum()
+#         # 记录数据
+#         total_un_served_populations.append([poi_delete, total_un_served_population])
+#         # 删除所有cbg剩余poi服务等于0的行
+#         sub_cbg_df_copy = sub_cbg_df_copy[sub_cbg_df_copy["remained_service"]>0]
 
-    # 依次删除poi的结果
-    poi_delete_result = [(each[1]/total_population) for each in total_un_served_populations]
-    poi_delete_result = [poi_delete_result[idx+1]-poi_delete_result[idx] for idx in range(len(poi_delete_result)-1)]
+#     # 依次删除poi的结果
+#     poi_delete_result = [(each[1]/total_population) for each in total_un_served_populations]
+#     poi_delete_result = [poi_delete_result[idx+1]-poi_delete_result[idx] for idx in range(len(poi_delete_result)-1)]
 
-    # 该次攻击结果
-    poi_attack_result = {poi_list[idx+1]:poi_delete_result[idx] for idx in range(len(poi_list)-1)}
+#     # 该次攻击结果
+#     poi_attack_result = {poi_list[idx+1]:poi_delete_result[idx] for idx in range(len(poi_list)-1)}
 
-    # 加到总结果里
-    for key in poi_attack_result.keys():
-        poi_important_dict[key] += poi_attack_result[key]
+#     # 加到总结果里
+#     for key in poi_attack_result.keys():
+#         poi_important_dict[key] += poi_attack_result[key]
 
-for key in poi_important_dict.keys():
-    poi_important_dict[key] /=500
+# for key in poi_important_dict.keys():
+#     poi_important_dict[key] /=500
 
-key_player_poi = sorted(poi_important_dict, key=poi_important_dict.get, reverse=True)
+# key_player_poi = sorted(poi_important_dict, key=poi_important_dict.get, reverse=True)
 
-plt.plot([each[1]/total_population for each in total_un_served_populations])
-plt.xlabel("# of delted poi")
-plt.ylabel(" unserviced population/total_pop")
+# plt.plot([each[1]/total_population for each in total_un_served_populations])
+# plt.xlabel("# of delted poi")
+# plt.ylabel(" unserviced population/total_pop")
