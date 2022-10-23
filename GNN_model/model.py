@@ -9,6 +9,7 @@ import dgl
 import networkx as nx
 import glob
 import matplotlib.pyplot as plt
+import random
 
 device = "cuda:0"
 
@@ -80,42 +81,48 @@ class Model(nn.Module):
 ################################################################################################
 ################################################################################################
 data_save_path = r"D:\Project\GNN_resilience\data\training_data"
-training_data_list = glob.glob(r"D:\Project\GNN_resilience\data\training_data\*.gpickle")
-# for each in training_data_list:
-file_name = training_data_list[0]
-G = nx.read_gpickle(file_name)
-G = nx.Graph.to_directed(G)
-graph = dgl.from_networkx(G, node_attrs = ["population", "latitude", "longitude"], edge_attrs=["weight", "mobility_flow", "rank_label", "value_label"], device=device)
+graph_dataset = glob.glob(r"D:\Project\GNN_resilience\data\training_data\*.gpickle")
+
+# 开始遍历图进行训练
+random.shuffle(graph_dataset)
+training_set = graph_dataset[:int(len(graph_dataset)*2/3)]
+test_set = graph_dataset[int(len(graph_dataset)*2/3):]
+
+# 遍历训练图
+for training_sample in training_set:
+    G = nx.read_gpickle(training_sample)
+    G = nx.Graph.to_directed(G)
+    graph = dgl.from_networkx(G, node_attrs = ["population", "latitude", "longitude"], edge_attrs=["weight", "mobility_flow", "rank_label", "value_label"], device=device)
 
 
-## 给DGL的图创建feature
-node_features = torch.concat((graph.ndata["population"].reshape((-1,1)),graph.ndata["latitude"].reshape((-1,1)),graph.ndata["longitude"].reshape((-1,1))),1)
+    ## 给DGL的图创建feature
+    node_features = torch.concat((graph.ndata["population"].reshape((-1,1)),graph.ndata["latitude"].reshape((-1,1)),graph.ndata["longitude"].reshape((-1,1))),1)
 
-graph.ndata['feature'] = node_features.to(device)
+    graph.ndata['feature'] = node_features.to(device)
 
-edge_features = torch.concat((graph.edata["weight"].reshape((-1,1)), graph.edata["mobility_flow"].reshape((-1,1))),1)
-graph.edata["feature"] = edge_features.to(device)
+    edge_features = torch.concat((graph.edata["weight"].reshape((-1,1)), graph.edata["mobility_flow"].reshape((-1,1))),1)
+    graph.edata["feature"] = edge_features.to(device)
 
-graph.edata['label'] = graph.edata["value_label"].to(device)
+    graph.edata['label'] = graph.edata["value_label"].to(device)
 
-graph.edata['train_mask'] = torch.zeros(graph.edata["value_label"].shape[0], dtype=torch.bool, device=device).bernoulli(0.6)
+    graph.edata['train_mask'] = torch.zeros(graph.edata["value_label"].shape[0], dtype=torch.bool, device=device).bernoulli(0.6)
 
 
-node_features = graph.ndata['feature']
-edge_label = graph.edata['label']
-train_mask = graph.edata['train_mask']
-model = Model(3, 20, 1).cuda()
-opt = torch.optim.Adam(model.parameters())
-losses =[]
-for epoch in range(10000):
-    pred = model(graph, node_features)
-    loss = ((pred[train_mask] - edge_label[train_mask]) ** 2).mean()
-    opt.zero_grad()
-    loss.backward()
-    opt.step()
-    losses.append(loss.item())
-    print(loss.item())
-
+    node_features = graph.ndata['feature']
+    edge_label = graph.edata['label']
+    train_mask = graph.edata['train_mask']
+    model = Model(3, 20, 1).cuda()
+    opt = torch.optim.Adam(model.parameters())
+    losses =[]
+    for epoch in range(2000):
+        pred = model(graph, node_features)
+        loss = ((pred[train_mask] - edge_label[train_mask]) ** 2).mean()
+        opt.zero_grad()
+        loss.backward()
+        opt.step()
+        losses.append(loss.item())
+        print(loss.item())
+    print("#################################################")
 plt.plot(losses)
 plt.xlabel("training step")
 plt.ylabel("MSE loss")
