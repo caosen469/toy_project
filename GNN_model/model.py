@@ -10,8 +10,22 @@ import networkx as nx
 import glob
 import matplotlib.pyplot as plt
 import random
+import os
+os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
 
 device = "cuda:0"
+
+# 自己写一个rankloss
+class RankLoss(nn.Module):
+    """计算rankloss"""
+    def __init__(self):
+        ...
+
+    # pred 是预测的值，gt是ground truth
+    def foward(slef, pred, gt):
+        
+        # 把prediction中每个元素转换成第几大
+        a = pred[train_mask]
 
 class SAGE(nn.Module):
     def __init__(self, in_feats, hid_feats, out_feats):
@@ -87,8 +101,9 @@ graph_dataset = glob.glob(r"D:\Project\GNN_resilience\data\training_data\*.gpick
 random.shuffle(graph_dataset)
 training_set = graph_dataset[:int(len(graph_dataset)*2/3)]
 test_set = graph_dataset[int(len(graph_dataset)*2/3):]
-
+losses =[]
 # 遍历训练图
+# for training_sample in training_set:
 for training_sample in training_set:
     G = nx.read_gpickle(training_sample)
     G = nx.Graph.to_directed(G)
@@ -113,16 +128,20 @@ for training_sample in training_set:
     train_mask = graph.edata['train_mask']
     model = Model(3, 20, 1).cuda()
     opt = torch.optim.Adam(model.parameters())
-    losses =[]
+    
+    criterion = nn.MSELoss(reduction="mean")
     for epoch in range(2000):
         pred = model(graph, node_features)
-        loss = ((pred[train_mask] - edge_label[train_mask]) ** 2).mean()
+        # loss = ((pred[train_mask] - edge_label[train_mask]) ** 2).mean()
+        loss = torch.sqrt(criterion(pred[train_mask].to(torch.float32), edge_label[train_mask].to(torch.float32)))
         opt.zero_grad()
         loss.backward()
         opt.step()
         losses.append(loss.item())
         print(loss.item())
     print("#################################################")
+
 plt.plot(losses)
 plt.xlabel("training step")
 plt.ylabel("MSE loss")
+plt.show()
