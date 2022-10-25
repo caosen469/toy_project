@@ -352,7 +352,7 @@ def all_graph_distance(sub_mobility_flow, sub_queen, sub_distance, sub_graph_nod
 #         break
 ####################################################################################################################################
 # 产生第一个节点
-for graph_number in range(100):
+for graph_number in range(10):
     node_kick_off = random.randint(0,len(queen_graph.nodes))
     node_number=50
     def get_node_neighbors(node_kick_off, queen_graph, node_number):
