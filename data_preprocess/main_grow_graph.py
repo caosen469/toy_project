@@ -341,134 +341,137 @@ def all_graph_distance(sub_mobility_flow, sub_queen, sub_distance, sub_graph_nod
                 graph_total_distance += nx.shortest_path_length(sub_queen, start_node, end_node, weight="weight") * flow_volume
     return graph_total_distance  
 
-# travel_result_distance = pd.DataFrame(columns = ["initial_distance", ])
-
-# 随机产生一些节点编号，抽样的子图是联通的就要，不然就重新采集
-# while True:
-#     # 抽取节点种子 
-#     # random_nodes = np.random.randint(0,len(queen_graph.nodes),size=(1,100))
-
-#     sub_queen = queen_graph.subgraph(np.random.randint(0,len(queen_graph.nodes),size=100).tolist()).copy()
-#     if nx.is_connected(sub_queen):
-#         break
 ####################################################################################################################################
 # 产生第一个节点
-for graph_number in range(1):
-    node_kick_off = random.randint(0,len(queen_graph.nodes))
-    node_number=50
-    def get_node_neighbors(node_kick_off, queen_graph, node_number):
-        total_node_number = 0
-        sample_nodes = []
+# for graph_add_number in range(100):
+node_kick_off = random.randint(0,len(queen_graph.nodes))
+node_number=50
+def get_node_neighbors(node_kick_off, queen_graph, node_number):
+    total_node_number = 0
+    sample_nodes = []
 
-        hop = get_neigbors(queen_graph, node_kick_off, depth=1)[1]
+    hop = get_neigbors(queen_graph, node_kick_off, depth=1)[1]
+    sample_nodes = sample_nodes + hop
+
+    while total_node_number <= node_number:
+        random.shuffle(hop)
+        hop = [get_neigbors(queen_graph, each, depth=1)[1] for each in hop]        
+        hop = [each2 for each1 in hop for each2 in each1]
+
         sample_nodes = sample_nodes + hop
-
-        while total_node_number <= node_number:
-            random.shuffle(hop)
-            hop = [get_neigbors(queen_graph, each, depth=1)[1] for each in hop]        
-            hop = [each2 for each1 in hop for each2 in each1]
-
-            sample_nodes = sample_nodes + hop
-            total_node_number = len(sample_nodes)
-            
-        return list(set(sample_nodes))
-
-    # 获取网络节点
-    sub_graph_nodes = get_node_neighbors(node_kick_off, queen_graph, node_number)    
-
-    # 获取子图
-    sub_queen = queen_graph.subgraph(sub_graph_nodes).copy()
-
-    # 获取子图对应的cbg数据
-    sub_cbg_df = cbg_df.iloc[sub_graph_nodes, :]
-    # sub_cbg_df = cbg_df.iloc[list(sub_queen.nodes), :]
-
-    # 获取子图对应的poi数据
-    def sub_poi(x, cbg_df, sub_cbg_df):
-        node_index = cbg_df[cbg_df["FIPS"]==x].index[0]
-        if node_index in sub_cbg_df.index:
-            return True
-        else: 
-            return False 
-
-    sub_pattern_df = pattern_df[pattern_df["poi_cbg"].map(lambda x:sub_poi(x, cbg_df, sub_cbg_df))]  
-
-    # 获取子图对应mobility flow
-    sub_mobility_flow = adjacency_flow[sub_graph_nodes,:]
-    sub_mobility_flow = sub_mobility_flow[:, sub_graph_nodes]
-    # sub_mobility_flow = adjacency_flow[list(sub_queen.nodes),:]
-    # sub_mobility_flow = sub_mobility_flow[:, list(sub_queen.nodes)]
-
-    # 获取子图对应的距离矩阵
-    sub_distance = adjacency_distance[sub_graph_nodes,:]
-    sub_distance = sub_distance[:,sub_graph_nodes]
-    # sub_distance = adjacency_distance[list(sub_queen.nodes),:]
-    # sub_distance = sub_distance[:,list(sub_queen.nodes)]
-
-    ####################################################################################################################################
-    # %% 攻击网络
-
-    ## 拆除连接，导致travel距离上升  
-
-    ## 加入循环
-
-    # 构造一个结果字典，键是连接，值是均值
-    disntance_importance_dict = {key: 0 for key in list(sub_queen.edges)}
-
-
-    stability_list = []
-    # 计算距离，给一个现在的flow + 邻接矩阵 + 位移距离
-    for monte_times in range(500):
-        sub_queen_copy = sub_queen.copy()
-        initial_distance = all_graph_distance(sub_mobility_flow, sub_queen_copy, sub_distance, sub_graph_nodes)
-
-        ## 删除subqueen里的edge
-        post_attack_distance = []
-        # 删除一条边
-        sub_queen_copy_edges = list(sub_queen_copy.edges).copy()
-        random.shuffle(sub_queen_copy_edges)
-        for idx, each in enumerate(sub_queen_copy_edges):
-            # 删除一条边
-            sub_queen_copy.remove_edge(each[0], each[1])
-            # 计算连通子图个数小于2则停止
-            if nx.number_connected_components(sub_queen_copy) >1:
-                break
-            # 计算删除边之后全图的travel时间
-            post_attack_distance.append(all_graph_distance(sub_mobility_flow, sub_queen_copy, sub_distance, sub_graph_nodes))
-            if len(post_attack_distance)>=2:
-                post_attack_distance[-1] < post_attack_distance[-2]
-
-        # 攻击完毕
-        # post_attack_distance = [each/initial_distance for each in post_attack_distance]
-      
-        # 计算攻击一次后全图的变化
-        # 这是第二个元素到最后一个元素
-        attack_result_list = [post_attack_distance[idx] - post_attack_distance[idx-1] for idx in range(1, len(post_attack_distance))]
-        # 第一个元素
-        first_element = [post_attack_distance[0]-initial_distance]
-        # 形成列表
-        attack_result_list = first_element + attack_result_list
-
-        # 形成字典 边：对应的距离增加
-        attack_result_dict = {sub_queen_copy_edges[idx]:attack_result_list[idx] for idx in range(len(post_attack_distance))}
-
-        # # 相比于前一次攻击，网络的全图距离增加的百分比
-        # attack_result_dict = {list(attack_result_dict.keys())[idx]:((attack_result_dict[list(attack_result_dict.keys())[idx]])-(attack_result_dict[list(attack_result_dict.keys())[idx-1]])/(attack_result_dict[list(attack_result_dict.keys())[idx-1]]))for idx in range(1, len(attack_result_dict))}
-
-        for key in attack_result_dict.keys():
-            disntance_importance_dict[key] += attack_result_dict[key]
+        total_node_number = len(sample_nodes)
         
-        stability_list.append(attack_result_dict)
+    return list(set(sample_nodes))
 
-    for key in disntance_importance_dict.keys():
-        disntance_importance_dict[key] /= 500
+# 获取网络节点
+sub_graph_nodes = get_node_neighbors(node_kick_off, queen_graph, node_number)    
 
-    file =  open("D:\\Project\\GNN_resilience\\data\\sample_stability\\sample_times" + str(graph_number) + ".txt", "w")
-    file.writelines(str(stability_list))
-    file.close()
+# 找到一个新节点
+for source_node in sub_graph_nodes:
+    # 与该source_node相连的节点
+    connected_node_of_source_node = list(nx.neighbors(queen_graph, source_node))
+    # 判断有没有节点在新的图里
+    for each in connected_node_of_source_node:
+        # 没有的话添加进去，得到新图索引，跳出循环
+        if not(each in sub_graph_nodes):
+            sub_graph_nodes.append(each) 
+            break
+    break
 
-    # 排序，找到key_player
-    key_player_cbg_edge = sorted(disntance_importance_dict, key=disntance_importance_dict.get, reverse=True)
+# 获取子图
+sub_queen = queen_graph.subgraph(sub_graph_nodes).copy()
+
+# 获取子图对应的cbg数据
+sub_cbg_df = cbg_df.iloc[sub_graph_nodes, :]
+# sub_cbg_df = cbg_df.iloc[list(sub_queen.nodes), :]
+
+# 获取子图对应的poi数据
+def sub_poi(x, cbg_df, sub_cbg_df):
+    node_index = cbg_df[cbg_df["FIPS"]==x].index[0]
+    if node_index in sub_cbg_df.index:
+        return True
+    else: 
+        return False 
+
+sub_pattern_df = pattern_df[pattern_df["poi_cbg"].map(lambda x:sub_poi(x, cbg_df, sub_cbg_df))]  
+
+# 获取子图对应mobility flow
+sub_mobility_flow = adjacency_flow[sub_graph_nodes,:]
+sub_mobility_flow = sub_mobility_flow[:, sub_graph_nodes]
+# sub_mobility_flow = adjacency_flow[list(sub_queen.nodes),:]
+# sub_mobility_flow = sub_mobility_flow[:, list(sub_queen.nodes)]
+
+# 获取子图对应的距离矩阵
+sub_distance = adjacency_distance[sub_graph_nodes,:]
+sub_distance = sub_distance[:,sub_graph_nodes]
+# sub_distance = adjacency_distance[list(sub_queen.nodes),:]
+# sub_distance = sub_distance[:,list(sub_queen.nodes)]
+
+####################################################################################################################################
+# %% 攻击网络
+
+## 拆除连接，导致travel距离上升  
+
+## 加入循环
+
+# 构造一个结果字典，键是连接，值是均值
+disntance_importance_dict = {key: 0 for key in list(sub_queen.edges)}
+
+
+stability_list = []
+# 计算距离，给一个现在的flow + 邻接矩阵 + 位移距离
+for monte_times in range(500):
+    sub_queen_copy = sub_queen.copy()
+    initial_distance = all_graph_distance(sub_mobility_flow, sub_queen_copy, sub_distance, sub_graph_nodes)
+
+    ## 删除subqueen里的edge
+    post_attack_distance = []
+    # 删除一条边
+    sub_queen_copy_edges = list(sub_queen_copy.edges).copy()
+    random.shuffle(sub_queen_copy_edges)
+    for idx, each in enumerate(sub_queen_copy_edges):
+        # 删除一条边
+        sub_queen_copy.remove_edge(each[0], each[1])
+        # 计算连通子图个数小于2则停止
+        if nx.number_connected_components(sub_queen_copy) >1:
+            break
+        # 计算删除边之后全图的travel时间
+        post_attack_distance.append(all_graph_distance(sub_mobility_flow, sub_queen_copy, sub_distance, sub_graph_nodes))
+        if len(post_attack_distance)>=2:
+            post_attack_distance[-1] < post_attack_distance[-2]
+
+    # 攻击完毕
+    # post_attack_distance = [each/initial_distance for each in post_attack_distance]
+    
+    # 计算攻击一次后全图的变化
+    # 这是第二个元素到最后一个元素
+    attack_result_list = [post_attack_distance[idx] - post_attack_distance[idx-1] for idx in range(1, len(post_attack_distance))]
+    # 第一个元素
+    first_element = [post_attack_distance[0]-initial_distance]
+    # 形成列表
+    attack_result_list = first_element + attack_result_list
+
+    # 形成字典 边：对应的距离增加
+    attack_result_dict = {sub_queen_copy_edges[idx]:attack_result_list[idx] for idx in range(len(post_attack_distance))}
+
+    # # 相比于前一次攻击，网络的全图距离增加的百分比
+    # attack_result_dict = {list(attack_result_dict.keys())[idx]:((attack_result_dict[list(attack_result_dict.keys())[idx]])-(attack_result_dict[list(attack_result_dict.keys())[idx-1]])/(attack_result_dict[list(attack_result_dict.keys())[idx-1]]))for idx in range(1, len(attack_result_dict))}
+
+    for key in attack_result_dict.keys():
+        disntance_importance_dict[key] += attack_result_dict[key]
+    
+    stability_list.append(attack_result_dict)
+
+for key in disntance_importance_dict.keys():
+    disntance_importance_dict[key] /= 500
+
+graph_number = 10
+file =  open("D:\\Project\\GNN_resilience\\data\\sample_stability\\sample_times" + str(graph_number) + ".txt", "w")
+file.writelines(str(stability_list))
+file.close()
+
+# 排序，找到key_player
+key_player_cbg_edge = sorted(disntance_importance_dict, key=disntance_importance_dict.get, reverse=True)
 
     ####################################################################################################################################
     # ## 保存图的数据
