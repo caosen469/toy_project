@@ -366,18 +366,26 @@ def get_node_neighbors(node_kick_off, queen_graph, node_number):
 # 获取网络节点
 sub_graph_nodes = get_node_neighbors(node_kick_off, queen_graph, node_number)    
 
-for graph_add_number in range(100):
-# 找到一个新节点
+for graph_add_number in range(2):
+    # 给图添加一个新的节点
+    sub_node_length =  len(sub_graph_nodes) # 加点前长度
+    sub_node_length_new =  len(sub_graph_nodes) # 加点后的长度
+    print(sub_node_length)
+    # 遍历当前所有节点
     for source_node in sub_graph_nodes:
+        
         # 与该source_node相连的节点
         connected_node_of_source_node = list(nx.neighbors(queen_graph, source_node))
         # 判断有没有节点在新的图里
         for each in connected_node_of_source_node:
             # 没有的话添加进去，得到新图索引，跳出循环
-            if not(each in sub_graph_nodes):
+            if each not in sub_graph_nodes:
                 sub_graph_nodes.append(each) 
+                sub_node_length_new =  len(sub_graph_nodes)
                 break
-        break
+        # 如果添加了的话
+        if sub_node_length_new==sub_node_length+1:
+            break
 
     # 获取子图
     sub_queen = queen_graph.subgraph(sub_graph_nodes).copy()
