@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 import random
 import os
 import dgl.function as fn
+import tqdm
 os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
 
 device = "cuda:0"
@@ -91,8 +92,8 @@ class Model(nn.Module):
         return self.pred(g, h)
 ################################################################################################
 ################################################################################################
-data_save_path = r"D:\Project\GNN_resilience\data\training_data"
-graph_dataset = glob.glob(r"D:\Project\GNN_resilience\data\training_data\*.gpickle")
+data_save_path = r"D:\Project\GNN_resilience\data\incremental_training_data"
+graph_dataset = glob.glob(r"D:\Project\GNN_resilience\data\incremental_training_data\*.gpickle")
 
 # 开始遍历图进行训练
 random.shuffle(graph_dataset)
@@ -101,7 +102,7 @@ test_set = graph_dataset[int(len(graph_dataset)*2/3):]
 losses =[]
 # 遍历训练图
 # for training_sample in training_set:
-for training_sample in training_set:
+for training_sample in tqdm.tqdm(training_set[:60]):
     G = nx.read_gpickle(training_sample)
     G = nx.Graph.to_directed(G)
     graph = dgl.from_networkx(G, node_attrs = ["population", "latitude", "longitude"], edge_attrs=["weight", "mobility_flow", "rank_label", "value_label"], device=device)
@@ -136,9 +137,15 @@ for training_sample in training_set:
         loss.backward()
         opt.step()
         losses.append(loss.item())
-        print(loss.item())
+        # print(loss.item())
     print("#################################################")
 
+model_save_path = "D:\\Project\\GNN_resilience\\code\\GNN_model\\trained_model\\"
+
+import time 
+model_name = "sample_" + str(len(os.listdir(r"D:\Project\GNN_resilience\data\incremental_training_data"))) + time.strftime('%Y-%m-%d-%H:%M:%S') + '.pt'
+
+torch.save(Model, model_save_path + 'model_name')
 # plt.plot(losses)
 # plt.xlabel("training step")
 # plt.ylabel("RMSE loss")

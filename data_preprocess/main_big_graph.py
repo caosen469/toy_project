@@ -323,6 +323,14 @@ adjacency_flow = np.loadtxt(r"D:\Project\GNN_resilience\result\adjacency_flow.cs
 adjacency_distance = np.loadtxt(r"D:\Project\GNN_resilience\result\adjacency_distance.csv",delimiter=',')
 
 ####################################################################################################################################
+# 把一个大图做成子图
+# 保存图
+save_path = r"D:\Project\GNN_resilience\data\big_graph"
+file_path = save_path + "\\" + 'big_graph' + ".gpickle"
+print(file_path)
+nx.write_gpickle(queen_graph, file_path)
+
+####################################################################################################################################
 #%% 从大的网络里采样得到导出子图induced graph
 random.seed(12345)
 def all_graph_distance(sub_mobility_flow, sub_queen, sub_distance, sub_graph_nodes):
@@ -341,43 +349,40 @@ def all_graph_distance(sub_mobility_flow, sub_queen, sub_distance, sub_graph_nod
                 graph_total_distance += nx.shortest_path_length(sub_queen, start_node, end_node, weight="weight") * flow_volume
     return graph_total_distance  
 
+# travel_result_distance = pd.DataFrame(columns = ["initial_distance", ])
+
+# 随机产生一些节点编号，抽样的子图是联通的就要，不然就重新采集
+# while True:
+#     # 抽取节点种子 
+#     # random_nodes = np.random.randint(0,len(queen_graph.nodes),size=(1,100))
+
+#     sub_queen = queen_graph.subgraph(np.random.randint(0,len(queen_graph.nodes),size=100).tolist()).copy()
+#     if nx.is_connected(sub_queen):
+#         break
 ####################################################################################################################################
 # 产生第一个节点
+for graph_number in range(1):
+    node_kick_off = random.randint(0,len(queen_graph.nodes))
+    node_number=50
+    def get_node_neighbors(node_kick_off, queen_graph, node_number):
+        total_node_number = 0
+        sample_nodes = []
 
-node_kick_off = random.randint(0,len(queen_graph.nodes))
-node_number=50
-def get_node_neighbors(node_kick_off, queen_graph, node_number):
-    total_node_number = 0
-    sample_nodes = []
-
-    hop = get_neigbors(queen_graph, node_kick_off, depth=1)[1]
-    sample_nodes = sample_nodes + hop
-
-    while total_node_number <= node_number:
-        random.shuffle(hop)
-        hop = [get_neigbors(queen_graph, each, depth=1)[1] for each in hop]        
-        hop = [each2 for each1 in hop for each2 in each1]
-
+        hop = get_neigbors(queen_graph, node_kick_off, depth=1)[1]
         sample_nodes = sample_nodes + hop
-        total_node_number = len(sample_nodes)
-        
-    return list(set(sample_nodes))
 
-# 获取网络节点
-sub_graph_nodes = get_node_neighbors(node_kick_off, queen_graph, node_number)    
+        while total_node_number <= node_number:
+            random.shuffle(hop)
+            hop = [get_neigbors(queen_graph, each, depth=1)[1] for each in hop]        
+            hop = [each2 for each1 in hop for each2 in each1]
 
-for graph_add_number in range(100):
-# 找到一个新节点
-    for source_node in sub_graph_nodes:
-        # 与该source_node相连的节点
-        connected_node_of_source_node = list(nx.neighbors(queen_graph, source_node))
-        # 判断有没有节点在新的图里
-        for each in connected_node_of_source_node:
-            # 没有的话添加进去，得到新图索引，跳出循环
-            if not(each in sub_graph_nodes):
-                sub_graph_nodes.append(each) 
-                break
-        break
+            sample_nodes = sample_nodes + hop
+            total_node_number = len(sample_nodes)
+            
+        return list(set(sample_nodes))
+
+    # 获取网络节点
+    sub_graph_nodes = get_node_neighbors(node_kick_off, queen_graph, node_number)    
 
     # 获取子图
     sub_queen = queen_graph.subgraph(sub_graph_nodes).copy()
@@ -408,7 +413,7 @@ for graph_add_number in range(100):
     # sub_distance = adjacency_distance[list(sub_queen.nodes),:]
     # sub_distance = sub_distance[:,list(sub_queen.nodes)]
 
-####################################################################################################################################
+    ####################################################################################################################################
     # %% 攻击网络
 
     ## 拆除连接，导致travel距离上升  
@@ -443,7 +448,7 @@ for graph_add_number in range(100):
 
         # 攻击完毕
         # post_attack_distance = [each/initial_distance for each in post_attack_distance]
-        
+      
         # 计算攻击一次后全图的变化
         # 这是第二个元素到最后一个元素
         attack_result_list = [post_attack_distance[idx] - post_attack_distance[idx-1] for idx in range(1, len(post_attack_distance))]
@@ -466,78 +471,77 @@ for graph_add_number in range(100):
     for key in disntance_importance_dict.keys():
         disntance_importance_dict[key] /= 500
 
-    # graph_number = 10
-    # file =  open("D:\\Project\\GNN_resilience\\data\\sample_stability\\sample_times" + str(graph_number) + ".txt", "w")
-    # file.writelines(str(stability_list))
-    # file.close()
+    file =  open("D:\\Project\\GNN_resilience\\data\\sample_stability\\sample_times" + str(graph_number) + ".txt", "w")
+    file.writelines(str(stability_list))
+    file.close()
 
     # 排序，找到key_player
     key_player_cbg_edge = sorted(disntance_importance_dict, key=disntance_importance_dict.get, reverse=True)
 
-####################################################################################################################################
-    ## 保存图的数据
-    data_save_path = r"D:\Project\GNN_resilience\data\incremental_training_data"
+    ####################################################################################################################################
+    # ## 保存图的数据
+    # data_save_path = r"D:\Project\GNN_resilience\data\training_data"
 
-    # networkx 添加节点属性
-    # 字典键是对应的节点编号，值是一系列属性
-    node_value_dict = {}
-    for idx in zip(list(sub_queen.nodes)): 
-        idx = idx[0]
-        # 获取对应行数据
-        row = sub_cbg_df[sub_cbg_df.index==idx]
-        row_population = row["POP2012"].values[0]
-        # 获取经纬度
-        row_xy = re.findall("\d+\.?\d*", row["centroid"].values[0])
-        row_latitude = float(row_xy[1])
-        row_longitude = float(row_xy[0])
-        value_dict = {"population": row_population, "latitude": row_latitude, "longitude": row_longitude}
-        node_value_dict[idx] = value_dict
+    # # networkx 添加节点属性
+    # # 字典键是对应的节点编号，值是一系列属性
+    # node_value_dict = {}
+    # for idx in zip(list(sub_queen.nodes)): 
+    #     idx = idx[0]
+    #     # 获取对应行数据
+    #     row = sub_cbg_df[sub_cbg_df.index==idx]
+    #     row_population = row["POP2012"].values[0]
+    #     # 获取经纬度
+    #     row_xy = re.findall("\d+\.?\d*", row["centroid"].values[0])
+    #     row_latitude = float(row_xy[1])
+    #     row_longitude = float(row_xy[0])
+    #     value_dict = {"population": row_population, "latitude": row_latitude, "longitude": row_longitude}
+    #     node_value_dict[idx] = value_dict
 
-    nx.set_node_attributes(sub_queen, node_value_dict)
+    # nx.set_node_attributes(sub_queen, node_value_dict)
 
-    # 存储边的数据
-    edge_value_dict = {}
-    for idx in zip(list(sub_queen.edges)):
-        idx = idx[0]
-        start_node = sub_graph_nodes.index(idx[0])
-        end_node = sub_graph_nodes.index(idx[1])
-        flow = sub_mobility_flow[start_node, end_node]
-        value_dict = {'mobility_flow': flow}
-        edge_value_dict[idx] = value_dict
-    nx.set_edge_attributes(sub_queen, edge_value_dict)
+    # # 存储边的数据
+    # edge_value_dict = {}
+    # for idx in zip(list(sub_queen.edges)):
+    #     idx = idx[0]
+    #     start_node = sub_graph_nodes.index(idx[0])
+    #     end_node = sub_graph_nodes.index(idx[1])
+    #     flow = sub_mobility_flow[start_node, end_node]
+    #     value_dict = {'mobility_flow': flow}
+    #     edge_value_dict[idx] = value_dict
+    # nx.set_edge_attributes(sub_queen, edge_value_dict)
 
-    # 存储边的lable
-    # 排序值
-    edge_rank_label_dict = {each:{"rank_label":idx+1} for idx, each in enumerate(key_player_cbg_edge)}
-    nx.set_edge_attributes(sub_queen, edge_rank_label_dict)
-    # 绝对值
-    abs_value = {key:{"value_label":disntance_importance_dict[key]} for key in disntance_importance_dict.keys()}
-    nx.set_edge_attributes(sub_queen, abs_value)
-    # 保存图
-    save_path = r"D:\Project\GNN_resilience\data\training_data"
-    file_path = save_path + "\\" +str(len(os.listdir(save_path))) + ".gpickle"
-    print(file_path)
-    nx.write_gpickle(sub_queen, file_path)
+    # # 存储边的lable
+    # # 排序值
+    # edge_rank_label_dict = {each:{"rank_label":idx+1} for idx, each in enumerate(key_player_cbg_edge)}
+    # nx.set_edge_attributes(sub_queen, edge_rank_label_dict)
+    # # 绝对值
+    # abs_value = {key:{"value_label":disntance_importance_dict[key]} for key in disntance_importance_dict.keys()}
+    # nx.set_edge_attributes(sub_queen, abs_value)
+    # # 保存图
+    # save_path = r"D:\Project\GNN_resilience\data\training_data"
+    # file_path = save_path + "\\" +str(len(os.listdir(save_path))) + ".gpickle"
+    # print(file_path)
+    # nx.write_gpickle(sub_queen, file_path)
 
-    ## 画图
-    pos = nx.spring_layout(sub_queen)
-    important_edges = key_player_cbg_edge[:3]
-    path_edges = important_edges
+    # ## 画图
+    # pos = nx.spring_layout(sub_queen)
+    # important_edges = key_player_cbg_edge[:3]
+    # path_edges = important_edges
 
-    # 画普通图
-    plt.figure(figsize=(20,10))
-    nx.draw_networkx_nodes(sub_queen, pos, nodelist=sub_queen.nodes)
-    nx.draw_networkx_edges(sub_queen, pos, edgelist=set(sub_queen.edges)-set(path_edges), connectionstyle='arc3, rad = 0.3')
+    # # 画普通图
+    # plt.figure(figsize=(20,10))
+    # nx.draw_networkx_nodes(sub_queen, pos, nodelist=sub_queen.nodes)
+    # nx.draw_networkx_edges(sub_queen, pos, edgelist=set(sub_queen.edges)-set(path_edges), connectionstyle='arc3, rad = 0.3')
 
-    # 画关键图
-    nx.draw_networkx_edges(sub_queen,pos,edgelist=path_edges,edge_color='r', width=3, connectionstyle='arc3, rad = 0.3')
+    # # 画关键图
+    # nx.draw_networkx_edges(sub_queen,pos,edgelist=path_edges,edge_color='r', width=3, connectionstyle='arc3, rad = 0.3')
 
-    # 画边权
-    edge_labels = nx.get_edge_attributes(sub_queen, 'mobility_flow')
-    nx.draw_networkx_edge_labels(sub_queen, pos, edge_labels)
+    # # 画边权
+    # edge_labels = nx.get_edge_attributes(sub_queen, 'mobility_flow')
+    # nx.draw_networkx_edge_labels(sub_queen, pos, edge_labels)
 
-    plt.savefig("D:\\Project\\GNN_resilience\\data\\incremental_training_data_fig\\" + str(len(os.listdir(save_path)))+".png")
-    plt.close()
+    # plt.savefig("D:\\Project\\GNN_resilience\\data\\training_data_fig\\" + str(len(os.listdir(save_path)))+".png")
+    # plt.close()
 
 # 保存图的结构
 # 保存节点属性
